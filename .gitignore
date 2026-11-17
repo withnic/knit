@@ -1,0 +1,14 @@
+# Build outputs
+/bin/
+/knit
+*.exe
+*.test
+*.out
+
+# Tool cache & AI workspace
+/.knit/
+/.ai-workspace/
+
+# Go vendor / coverage
+/vendor/
+coverage.out
