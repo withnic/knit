@@ -29,7 +29,7 @@ func TestRun_Usage(t *testing.T) {
 	}{
 		{name: "no args", args: nil, wantCode: exitUsage, wantErrOut: "Usage:"},
 		{name: "help", args: []string{"help"}, wantCode: exitOK, wantOut: "knit gen [flags]"},
-		{name: "version", args: []string{"version"}, wantCode: exitOK, wantOut: "knit dev\n"},
+		{name: "version", args: []string{"version"}, wantCode: exitOK, wantOut: "knit "},
 		{name: "unknown command", args: []string{"build"}, wantCode: exitUsage, wantErrOut: `unknown command "build"`},
 		{name: "gen -h", args: []string{"gen", "-h"}, wantCode: exitOK, wantErrOut: "-graph-out"},
 		{name: "gen bad flag", args: []string{"gen", "-nope"}, wantCode: exitUsage, wantErrOut: "flag provided but not defined"},
@@ -43,6 +43,21 @@ func TestRun_Usage(t *testing.T) {
 					tt.args, code, out, errOut, tt.wantCode, tt.wantOut, tt.wantErrOut)
 			}
 		})
+	}
+}
+
+func TestVersionString(t *testing.T) {
+	old := version
+	t.Cleanup(func() { version = old })
+
+	version = "v1.2.3"
+	if got := versionString(); got != "v1.2.3" {
+		t.Errorf("versionString() with ldflags = %q, want v1.2.3", got)
+	}
+	// Test binaries carry no module version, so the fallback is "dev".
+	version = ""
+	if got := versionString(); got != "dev" {
+		t.Errorf("versionString() without ldflags = %q, want dev", got)
 	}
 }
 

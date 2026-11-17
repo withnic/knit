@@ -13,14 +13,30 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 
 	"github.com/withnic/knit/internal/di"
 	"github.com/withnic/knit/internal/graphschema"
 )
 
-// version is set at build time with -ldflags "-X main.version=...".
-var version = "dev"
+// version is set at build time with -ldflags "-X main.version=..." (make
+// build, GoReleaser). When it is empty, versionString falls back to the module
+// version recorded by the go command, e.g. for `go install ...@v0.1.0`.
+var version = ""
+
+// versionString returns the version to report.
+func versionString() string {
+	if version != "" {
+		return version
+	}
+	if bi, ok := debug.ReadBuildInfo(); ok {
+		if v := bi.Main.Version; v != "" && v != "(devel)" {
+			return v
+		}
+	}
+	return "dev"
+}
 
 // Exit codes.
 const (
@@ -55,7 +71,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	case "gen":
 		return runGen(ctx, args[1:], stdout, stderr)
 	case "version", "-version", "--version":
-		fmt.Fprintln(stdout, "knit", version)
+		fmt.Fprintln(stdout, "knit", versionString())
 		return exitOK
 	case "help", "-h", "-help", "--help":
 		fmt.Fprint(stdout, usage)
