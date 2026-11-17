@@ -1,0 +1,36 @@
+name: Feature request / 機能の要望
+description: Suggest an improvement or a new feature. / 改善や新しい機能を提案する
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        knit deliberately supports a small subset of google/wire. `wire.Struct`, `wire.Value`, `wire.InterfaceValue`, `wire.FieldsOf` and variadic, method or generic providers will not be added; see the [README](https://github.com/withnic/knit#not-supported) for alternatives.
+        knit は google/wire の機能のうち、意図的に小さなサブセットだけをサポートしています。`wire.Struct`、`wire.Value`、`wire.InterfaceValue`、`wire.FieldsOf`、可変長引数・メソッド・ジェネリックのプロバイダは追加しません。代わりの書き方は [README](https://github.com/withnic/knit/blob/main/README.ja.md#サポートしない機能) を参照してください。
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve? / どんな問題を解決したいですか？
+      description: Describe your use case rather than the solution first. / 解決策より先に、使いたい場面を書いてください。
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution / 提案する解決策
+      description: What would you like knit to do? Example code is welcome. / knit にどう動いてほしいですか？コード例も歓迎します。
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered / 検討した代替案
+      description: Can it be done today with a provider function or provider set? / 今あるプロバイダ関数やプロバイダセットで実現できませんか？
+  - type: dropdown
+    id: contribute
+    attributes:
+      label: Would you like to work on it? / 自分で実装したいですか？
+      options:
+        - "Yes / はい"
+        - "Maybe, with guidance / 相談しながらなら"
+        - "No / いいえ"

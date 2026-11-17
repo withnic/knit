@@ -1,0 +1,72 @@
+name: Bug report / バグ報告
+description: Report something that does not work as expected. / 期待どおりに動かないことを報告する
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Please do **not** report security vulnerabilities here; see [SECURITY.md](https://github.com/withnic/knit/security/policy).
+        報告ありがとうございます。セキュリティ上の問題はここには書かず、[SECURITY.md](https://github.com/withnic/knit/security/policy) の手順で報告してください。
+  - type: input
+    id: version
+    attributes:
+      label: knit version / knit のバージョン
+      description: Output of `knit version`. / `knit version` の出力
+      placeholder: knit v0.1.0
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Mode / モード
+      options:
+        - knit (default)
+        - wire (-mode=wire)
+    validations:
+      required: true
+  - type: input
+    id: go-version
+    attributes:
+      label: Go version and OS / Go のバージョンと OS
+      description: Output of `go version`. / `go version` の出力
+      placeholder: go version go1.27.4 linux/amd64
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened? / 何が起きましたか？
+      description: Include the full command and its output (errors, generated code). / 実行したコマンドと出力（エラーや生成コード）をすべて貼ってください。
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect? / 期待していた動作は？
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce / 再現手順
+      description: |
+        A minimal example is the fastest way to a fix: providers, the injector declaration and the command you ran.
+        最小限の再現例（プロバイダ、Injector の宣言、実行したコマンド）があると、いちばん早く直せます。
+      value: |
+        ```go
+        // providers / プロバイダ
+
+        // injector declaration (knit.go or wire.go) / Injector の宣言
+        ```
+
+        ```sh
+        knit gen ./...
+        ```
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else? / その他
+      description: Links, workarounds, related issues. / 参考リンク、回避策、関連する Issue など
