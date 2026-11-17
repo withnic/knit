@@ -3,12 +3,15 @@ name: Dependency review
 # Blocks pull requests that add dependencies with known vulnerabilities or
 # incompatible licenses. knit allows only golang.org/x/tools as an external
 # dependency (docs/04_guidelines.md); depguard enforces that in `make lint`.
+#
+# The result goes to the job summary instead of a PR comment, so the job
+# needs no write access and works the same for pull requests from forks
+# (whose token is read-only).
 on:
   pull_request:
 
 permissions:
   contents: read
-  pull-requests: write
 
 jobs:
   review:
@@ -18,4 +21,4 @@ jobs:
       - uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4.9.0
         with:
           fail-on-severity: moderate
-          comment-summary-in-pr: on-failure
+          comment-summary-in-pr: never
