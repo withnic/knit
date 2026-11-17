@@ -81,6 +81,9 @@ wire.NewSet を平坦化（Flatten）して展開済みの有効Provider一覧
 Bindings
  []BindingSpec
 有効なBind一覧
+Func
+ *types.Func
+Loader が設定する型チェック済みの Injector 宣言。コード生成時のシグネチャ・import・ゼロ値の描画に使用（手組みの Spec では nil）
 
 
 

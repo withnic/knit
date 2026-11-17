@@ -113,4 +113,9 @@ type InjectorSpec struct {
 	// Bindings is the flattened list of interface bindings, sorted by
 	// InterfaceType.
 	Bindings []BindingSpec
+
+	// Func is the type-checked injector declaration. It is set by the Loader
+	// and is required by the code generator to render the injector signature
+	// and imports. It is nil for specs built by hand (e.g. resolver tests).
+	Func *types.Func
 }

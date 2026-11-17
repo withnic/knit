@@ -27,7 +27,8 @@ const loadMode = packages.NeedName |
 	packages.NeedSyntax |
 	packages.NeedTypes |
 	packages.NeedTypesInfo |
-	packages.NeedImports
+	packages.NeedImports |
+	packages.NeedModule
 
 // Sentinel errors that callers (and tests) can match with errors.Is.
 var (
@@ -235,6 +236,7 @@ func (l *Loader) injector(ctx context.Context, pkg *packages.Package, filePath s
 		HasError:   hasErr,
 		Providers:  sb.sortedProviders(),
 		Bindings:   sb.sortedBindings(),
+		Func:       obj,
 	}, nil
 }
 
