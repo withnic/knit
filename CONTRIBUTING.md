@@ -4,6 +4,8 @@ English | [日本語](#日本語)
 
 Thank you for your interest in knit! Bug reports, documentation fixes and pull requests are all welcome.
 
+This project follows the [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold it.
+
 ## Before you start
 
 - **Bugs**: open an issue with the bug report template. A minimal example module that reproduces the problem helps a lot.
@@ -80,6 +82,8 @@ By contributing, you agree that your contributions are licensed under the [MIT L
 ## 日本語
 
 knit に興味を持っていただきありがとうございます。バグ報告、ドキュメントの修正、プルリクエスト、どれも歓迎します。
+
+このプロジェクトは[行動規範](CODE_OF_CONDUCT.md#コントリビューター行動規範)に従います。参加される方は、これを守ってください。
 
 ## 始める前に
 
