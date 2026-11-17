@@ -12,3 +12,4 @@
 # Go vendor / coverage
 /vendor/
 coverage.out
+/dist/

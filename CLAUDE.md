@@ -37,6 +37,18 @@ make cover      # カバレッジ
 make build      # bin/knit のビルド
 ```
 
+GitHub Actions（`.github/workflows/`）:
+
+| ワークフロー | 内容 |
+|---|---|
+| `ci.yml` | push・PR ごとに `make check` / `make build`、`make test-all`（Linux・macOS）、`make test-race` / `make cover`（Linux）、`make vuln`（週次でも実行） |
+| `codeql.yml` | CodeQL によるセキュリティ解析（push・PR・週次） |
+| `dependency-review.yml` | PR で追加される依存の脆弱性・ライセンス検査 |
+| `scorecard.yml` | OpenSSF Scorecard によるサプライチェーン評価 |
+| `release.yml` | `v*` タグの push でテスト後に GoReleaser（`.goreleaser.yaml`）でバイナリを作成し、GitHub Release とビルド来歴（attestation）を公開 |
+
+依存とアクションの更新は Dependabot（`.github/dependabot.yml`、週次）。ワークフローでは Makefile のターゲットを呼ぶだけにし、手順を Makefile と二重管理しないこと。`uses:` はタグではなくコミットハッシュで固定し、`# vX.Y.Z` コメントを付けること（Dependabot がハッシュとコメントを一緒に更新する）。
+
 ## 4. 開発・実装ルール
 
 - **スコープ厳守**: `wire.Struct` や `wire.Value` などの対象外機能は実装しないこと。
