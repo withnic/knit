@@ -206,6 +206,8 @@ func TestScan_Symbols(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.id, func(t *testing.T) {
 			got := symbolByID(t, idx, tt.id)
+			// Signatures are covered by TestScan_Signatures.
+			got.Signature, got.IfaceMethods, got.IfaceEmbeds = "", nil, false
 			want := tt.want
 			want.ID = tt.id
 			want.FilePath = got.FilePath

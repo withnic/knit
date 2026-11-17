@@ -14,6 +14,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
 	"strconv"
@@ -330,6 +331,9 @@ func (c *symbolCollector) funcDecl(d *ast.FuncDecl) SymbolNode {
 	s := c.newSymbol(kind, d.Name.Name, start, d.End(), nodes...)
 	if kind == KindMethod {
 		s.ReceiverType = receiverType(d.Recv.List[0].Type)
+		if !hasTypeParams(d.Recv.List[0].Type) {
+			s.Signature = funcSignature(d.Type)
+		}
 	}
 	s.IsTest = kind == KindFunc && c.info.IsTestFile && isTestFunc(d)
 	s.IsHub = c.isHub(s.BaseName)
@@ -367,7 +371,11 @@ func (c *symbolCollector) genDecl(d *ast.GenDecl) []SymbolNode {
 			if s.TypeParams != nil {
 				nodes = append(nodes, s.TypeParams)
 			}
-			out = append(out, c.newSymbol(kind, s.Name.Name, start, end, nodes...))
+			sym := c.newSymbol(kind, s.Name.Name, start, end, nodes...)
+			if it, ok := s.Type.(*ast.InterfaceType); ok {
+				sym.IfaceMethods, sym.IfaceEmbeds = interfaceMethods(it, s.TypeParams != nil)
+			}
+			out = append(out, sym)
 		case *ast.ValueSpec:
 			if s.Doc != nil {
 				start = s.Doc.Pos()
@@ -515,9 +523,17 @@ func buildIndex(modPath string, results []*fileResult) *RepoIndex {
 		idx.Files = append(idx.Files, r.info)
 		idx.FileImports[r.info.Path] = r.imports
 
+		self := modPath
+		if r.info.PkgDir != "." {
+			self += "/" + strings.TrimPrefix(r.info.PkgDir, "./")
+		}
 		for i := range r.symbols {
 			s := &r.symbols[i]
 			s.ID = symbolID(r.info, s)
+			s.Signature = qualifySignature(s.Signature, self, r.imports)
+			for name, sig := range s.IfaceMethods {
+				s.IfaceMethods[name] = qualifySignature(sig, self, r.imports)
+			}
 			idx.Symbols = append(idx.Symbols, *s)
 		}
 	}
@@ -606,4 +622,189 @@ func isMajorVersion(s string) bool {
 	}
 	_, err := strconv.Atoi(s[1:])
 	return err == nil
+}
+
+// Signature normalization. While scanning, named types are rendered with a
+// placeholder qualifier: "{.}Name" for the file's own package and
+// "{alias}.Name" for imported ones. buildIndex replaces the placeholders with
+// import paths once unaliased imports are resolved to package names.
+
+// errUnknownType aborts rendering of types whose identity cannot be
+// determined without type checking.
+var errUnknownType = errors.New("unknown type")
+
+// funcSignature renders "(<params>)(<results>)" or "" when unknown.
+func funcSignature(ft *ast.FuncType) string {
+	s, err := renderFunc(ft)
+	if err != nil {
+		return ""
+	}
+	return s
+}
+
+func renderFunc(ft *ast.FuncType) (string, error) {
+	if ft.TypeParams != nil {
+		return "", errUnknownType
+	}
+	params, err := renderFields(ft.Params)
+	if err != nil {
+		return "", err
+	}
+	results, err := renderFields(ft.Results)
+	if err != nil {
+		return "", err
+	}
+	return "(" + params + ")(" + results + ")", nil
+}
+
+func renderFields(fl *ast.FieldList) (string, error) {
+	if fl == nil {
+		return "", nil
+	}
+	var parts []string
+	for _, f := range fl.List {
+		t, err := renderType(f.Type)
+		if err != nil {
+			return "", err
+		}
+		for range max(len(f.Names), 1) {
+			parts = append(parts, t)
+		}
+	}
+	return strings.Join(parts, ","), nil
+}
+
+func renderType(e ast.Expr) (string, error) {
+	switch t := e.(type) {
+	case *ast.Ident:
+		if predeclared[t.Name] {
+			if t.Name == "any" {
+				return "interface{}", nil
+			}
+			return t.Name, nil
+		}
+		return "{.}" + t.Name, nil
+	case *ast.SelectorExpr:
+		x, ok := t.X.(*ast.Ident)
+		if !ok {
+			return "", errUnknownType
+		}
+		return "{" + x.Name + "}." + t.Sel.Name, nil
+	case *ast.ParenExpr:
+		return renderType(t.X)
+	case *ast.StarExpr:
+		return prefixed("*", t.X)
+	case *ast.Ellipsis:
+		return prefixed("...", t.Elt)
+	case *ast.ArrayType:
+		if t.Len == nil {
+			return prefixed("[]", t.Elt)
+		}
+		if lit, ok := t.Len.(*ast.BasicLit); ok {
+			return prefixed("["+lit.Value+"]", t.Elt)
+		}
+		return "", errUnknownType
+	case *ast.MapType:
+		k, err := renderType(t.Key)
+		if err != nil {
+			return "", err
+		}
+		return prefixed("map["+k+"]", t.Value)
+	case *ast.ChanType:
+		switch t.Dir {
+		case ast.SEND:
+			return prefixed("chan<- ", t.Value)
+		case ast.RECV:
+			return prefixed("<-chan ", t.Value)
+		default:
+			return prefixed("chan ", t.Value)
+		}
+	case *ast.FuncType:
+		s, err := renderFunc(t)
+		return "func" + s, err
+	case *ast.InterfaceType:
+		if t.Methods == nil || len(t.Methods.List) == 0 {
+			return "interface{}", nil
+		}
+	case *ast.StructType:
+		if t.Fields == nil || len(t.Fields.List) == 0 {
+			return "struct{}", nil
+		}
+	}
+	return "", errUnknownType
+}
+
+func prefixed(prefix string, e ast.Expr) (string, error) {
+	s, err := renderType(e)
+	return prefix + s, err
+}
+
+// interfaceMethods returns the declared methods of an interface with their
+// signatures, and whether it embeds other types. Methods of generic
+// interfaces get unknown ("") signatures.
+func interfaceMethods(it *ast.InterfaceType, generic bool) (map[string]string, bool) {
+	methods := make(map[string]string)
+	embeds := false
+	if it.Methods == nil {
+		return methods, false
+	}
+	for _, f := range it.Methods.List {
+		ft, ok := f.Type.(*ast.FuncType)
+		if !ok || len(f.Names) == 0 {
+			embeds = true
+			continue
+		}
+		sig := ""
+		if !generic {
+			sig = funcSignature(ft)
+		}
+		for _, n := range f.Names {
+			methods[n.Name] = sig
+		}
+	}
+	return methods, embeds
+}
+
+// hasTypeParams reports whether a receiver type expression is generic.
+func hasTypeParams(e ast.Expr) bool {
+	switch t := e.(type) {
+	case *ast.StarExpr:
+		return hasTypeParams(t.X)
+	case *ast.ParenExpr:
+		return hasTypeParams(t.X)
+	case *ast.IndexExpr, *ast.IndexListExpr:
+		return true
+	}
+	return false
+}
+
+var placeholder = regexp.MustCompile(`\{([^}]*)\}`)
+
+// qualifySignature replaces placeholders with import paths. It returns ""
+// (unknown) when a qualifier cannot be resolved.
+func qualifySignature(sig, self string, imports map[string]string) string {
+	if sig == "" {
+		return ""
+	}
+	for alias := range imports {
+		if strings.HasPrefix(alias, ".") {
+			return "" // dot-imported names are indistinguishable from local ones
+		}
+	}
+	unknown := false
+	out := placeholder.ReplaceAllStringFunc(sig, func(m string) string {
+		alias := m[1 : len(m)-1]
+		if alias == "." {
+			return self + "."
+		}
+		if p, ok := imports[alias]; ok {
+			return p
+		}
+		unknown = true
+		return m
+	})
+	if unknown {
+		return ""
+	}
+	return out
 }

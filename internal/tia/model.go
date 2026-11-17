@@ -86,6 +86,18 @@ type SymbolNode struct {
 	// the declaration (base names only; package qualifiers are resolved via
 	// the file's ImportMap).
 	Refs []string
+	// Signature is the normalized signature of a method, e.g.
+	// "(context.Context,string)(error)" with every named type qualified by
+	// its import path. Empty when it cannot be determined statically
+	// (generic receivers, anonymous structs, ...), which matches any
+	// signature.
+	Signature string
+	// IfaceMethods maps the methods declared by an interface to their
+	// normalized signatures (interfaces only).
+	IfaceMethods map[string]string
+	// IfaceEmbeds reports that an interface embeds other interfaces or type
+	// constraints, so its method set is not fully known.
+	IfaceEmbeds bool
 }
 
 // DiffRange is a range of changed lines in one file, taken from

@@ -1,0 +1,26 @@
+{
+  "version": "1.0",
+  "generated_at": "2026-11-17T00:00:00Z",
+  "injectors": [
+    {
+      "name": "InitializeOrderHandler",
+      "pkg_path": "example.com/app/internal/di",
+      "root_type": "*example.com/app/internal/handler.OrderHandler",
+      "dependencies": [
+        {"pkg_path": "example.com/app/internal/handler", "pkg_dir": "./internal/handler", "type": "*example.com/app/internal/handler.OrderHandler", "provider": "example.com/app/internal/handler.NewOrderHandler"},
+        {"pkg_path": "example.com/app/internal/order", "pkg_dir": "./internal/order", "type": "*example.com/app/internal/order.OrderService", "provider": "example.com/app/internal/order.NewOrderService"}
+      ]
+    },
+    {
+      "name": "InitializeUserHandler",
+      "pkg_path": "example.com/app/internal/di",
+      "root_type": "*example.com/app/internal/handler.UserHandler",
+      "dependencies": [
+        {"pkg_path": "example.com/app/internal/handler", "pkg_dir": "./internal/handler", "type": "*example.com/app/internal/handler.UserHandler", "provider": "example.com/app/internal/handler.NewUserHandler"},
+        {"pkg_path": "example.com/app/internal/repo", "pkg_dir": "./internal/repo", "type": "*example.com/app/internal/repo.UserRepo", "provider": "example.com/app/internal/repo.NewUserRepo"},
+        {"pkg_path": "example.com/app/internal/service", "pkg_dir": "./internal/service", "type": "*example.com/app/internal/service.userService", "provider": "example.com/app/internal/service.NewUserService"},
+        {"pkg_path": "example.com/app/internal/service", "pkg_dir": "./internal/service", "type": "example.com/app/internal/service.UserService", "provider": "example.com/app/internal/service.NewUserService", "bound_from": "*example.com/app/internal/service.userService"}
+      ]
+    }
+  ]
+}

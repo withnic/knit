@@ -90,7 +90,15 @@ go test -p に渡すパッケージ並列数（DB競合防止用）
 -hub-exclude
  string
 (空)
-逆引き探索の打ち止め（Stop Node）とするハブ関数名パターン（例: NewServer,SetupRouter,Initialize）
+逆引き探索の打ち止め（Stop Node）とするハブ関数名パターン（例: NewServer,SetupRouter,Initialize）。完全一致、または path.Match 形式のワイルドカード（Initialize*）
+-graph
+ string
+.knit/di-graph.json
+knit gen が出力したDI依存グラフJSONのパス。ハブで打ち止めた先のInjector単位のテスト選定に使用（存在しない場合は警告のみで続行）
+-v
+ bool
+false
+各テストの選択理由（シード、ハブ停止、影響Injector、フォールバック）を標準エラーに出力
 
 4. 非機能要件
 高速動作
