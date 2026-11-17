@@ -1,6 +1,6 @@
 module example.com/fixture
 
-go 1.27
+go 1.26
 
 require github.com/google/wire v0.0.0
 

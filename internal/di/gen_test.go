@@ -170,7 +170,7 @@ func knitStubModule(t *testing.T, dir string) {
 	if err := os.MkdirAll(stub, 0o750); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(stub, "go.mod"), []byte("module github.com/withnic/knit\n\ngo 1.27\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(stub, "go.mod"), []byte("module github.com/withnic/knit\n\ngo 1.26\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(stub, "knit.go"), src, 0o600); err != nil {

@@ -23,7 +23,7 @@ The only external dependency allowed is `golang.org/x/tools/go/packages`. The ma
 
 ## Development setup
 
-You need Go 1.27.4 or later and `make`. Lint and vulnerability tools are installed automatically, at pinned versions, into `./bin`.
+You need Go 1.26 or later and `make`. Lint and vulnerability tools are installed automatically, at pinned versions, into `./bin`.
 
 ```sh
 git clone https://github.com/<your-account>/knit.git
@@ -102,7 +102,7 @@ knit は google/wire の機能のうち、意図的に小さなサブセット�
 
 ## 開発環境
 
-Go 1.27.4 以上と `make` が必要です。リンターと脆弱性スキャンのツールは、バージョンを固定して `./bin` に自動でインストールされます。
+Go 1.26 以上と `make` が必要です。リンターと脆弱性スキャンのツールは、バージョンを固定して `./bin` に自動でインストールされます。
 
 ```sh
 git clone https://github.com/<あなたのアカウント>/knit.git

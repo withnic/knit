@@ -128,8 +128,8 @@ func TestInitializeSvc(t *testing.T) {
 		markerSrc = "package wire\n\nfunc Build(...interface{}) string { return \"\" }\n\n" +
 			"type ProviderSet struct{}\n\nfunc NewSet(...interface{}) ProviderSet { return ProviderSet{} }\n"
 	}
-	files["go.mod"] = "module example.com/pipe\n\ngo 1.27\n\nrequire " + markerPath + " v0.0.0\n\nreplace " + markerPath + " => ./third_party/marker\n"
-	files["third_party/marker/go.mod"] = "module " + markerPath + "\n\ngo 1.27\n"
+	files["go.mod"] = "module example.com/pipe\n\ngo 1.26\n\nrequire " + markerPath + " v0.0.0\n\nreplace " + markerPath + " => ./third_party/marker\n"
+	files["third_party/marker/go.mod"] = "module " + markerPath + "\n\ngo 1.26\n"
 	files["third_party/marker/marker.go"] = markerSrc
 	files["di/"+mode+".go"] = `//go:build ` + mode + `inject
 
@@ -226,7 +226,7 @@ func TestGen_ErrorExitCode(t *testing.T) {
 		t.Skip("runs go list")
 	}
 	dir := t.TempDir()
-	write(t, dir, "go.mod", "module example.com/empty\n\ngo 1.27\n")
+	write(t, dir, "go.mod", "module example.com/empty\n\ngo 1.26\n")
 	write(t, dir, "a/a.go", "package a\n")
 	t.Setenv("GOWORK", "off")
 	t.Setenv("GOFLAGS", "-mod=mod")

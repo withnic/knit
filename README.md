@@ -17,7 +17,7 @@ You list your constructors once; knit works out the order to call them in and wr
 
 ## Install
 
-knit requires Go 1.27.4 or later.
+knit requires Go 1.26 or later.
 
 ```sh
 # Command-line tool
