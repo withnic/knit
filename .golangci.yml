@@ -110,6 +110,11 @@ linters:
           - gosec
           - prealloc
           - unparam
+      # Copying structs in test loops is fine; readability wins over speed.
+      - path: _test\.go
+        linters:
+          - gocritic
+        text: rangeValCopy
 
 formatters:
   enable:
