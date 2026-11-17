@@ -257,7 +257,7 @@ func (r *resolver) visit(t TypeKey) error {
 
 // source returns the provider output type or parameter that ultimately
 // supplies t after following bindings, plus the bound concrete type.
-func (r *resolver) source(t TypeKey) (supplier TypeKey, boundFrom TypeKey) {
+func (r *resolver) source(t TypeKey) (supplier, boundFrom TypeKey) {
 	supplier = t
 	for {
 		if _, ok := r.params[supplier]; ok {

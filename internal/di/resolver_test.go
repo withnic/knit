@@ -19,8 +19,8 @@ func prov(id string, out TypeKey, params ...TypeKey) ProviderNode {
 
 func stepIDs(r *ResolvedInjector) []string {
 	ids := make([]string, len(r.Steps))
-	for i, s := range r.Steps {
-		ids[i] = s.Provider.ID
+	for i := range r.Steps {
+		ids[i] = r.Steps[i].Provider.ID
 	}
 	return ids
 }
@@ -134,7 +134,8 @@ func TestResolve_TopologicalOrder(t *testing.T) {
 // assertTopological checks that every provider argument refers to an earlier step.
 func assertTopological(t *testing.T, r *ResolvedInjector) {
 	t.Helper()
-	for i, s := range r.Steps {
+	for i := range r.Steps {
+		s := &r.Steps[i]
 		for _, a := range s.Args {
 			if a.Kind == FromProvider && a.Index >= i {
 				t.Errorf("step %d (%s) depends on later step %d", i, s.Provider.ID, a.Index)
@@ -151,7 +152,7 @@ func TestResolve_Deterministic(t *testing.T) {
 		prov("ex.com/b.NewB", "ex.com/b.B", "ex.com/a.A"),
 	}
 	var first []string
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		// Rotate the input order; the output must not change.
 		ps := append(append([]ProviderNode(nil), providers[i%len(providers):]...), providers[:i%len(providers)]...)
 		got, err := Resolve(&InjectorSpec{FuncName: "Init", ReturnType: "ex.com/z.Z", Providers: ps})

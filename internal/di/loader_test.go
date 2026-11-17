@@ -24,7 +24,7 @@ var fixture struct {
 	err    error
 }
 
-func loadFixture(t *testing.T) (*Loader, map[string]*packages.Package) {
+func loadFixture(t *testing.T) (loader *Loader, pkgs map[string]*packages.Package) {
 	t.Helper()
 	fixture.once.Do(func() {
 		dir, err := filepath.Abs(filepath.Join("testdata", "fixture"))

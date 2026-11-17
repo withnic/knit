@@ -497,7 +497,7 @@ func paramSpecs(sig *types.Signature) ([]ParamSpec, error) {
 			ErrVariadic, name, NewTypeKey(elem).Short(), NewTypeKey(elem).Short())
 	}
 	out := make([]ParamSpec, 0, ps.Len())
-	for i := 0; i < ps.Len(); i++ {
+	for i := range ps.Len() {
 		p := ps.At(i)
 		out = append(out, ParamSpec{Name: p.Name(), Type: NewTypeKey(p.Type())})
 	}

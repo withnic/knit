@@ -23,19 +23,27 @@ docs/04_guidelines.md
 コーディング規約、決定論的出力ルール、テスト戦略、禁止事項
 
 3. ビルド・テストコマンド
-開発時に使用する基本操作コマンド一覧：
+開発操作はすべて Makefile 経由で実行する（`make help` で一覧表示）。ツール類（golangci-lint, govulncheck）はバージョン固定で ./bin に自動インストールされる。
 
 全ユニットテスト実行（高速）
-go test -short -v ./...
+make test          # go test -short ./...
 結合テスト含む全テスト実行
-go test -v ./...
+make test-all      # go test ./...
+フォーマット / リント
+make fmt           # gofumpt + goimports
+make lint          # golangci-lint（.golangci.yml）
+CI 相当の一括チェック（tidy・フォーマット・リント・ユニットテスト）
+make check
+脆弱性スキャン / カバレッジ
+make vuln
+make cover
 バイナリビルド
-go build -o bin/knit ./cmd/knit
+make build         # bin/knit
 4. 開発・実装ルール
 スコープ厳守
 wire.Struct や wire.Value などの対象外機能は実装しないこと。
 検証の徹底
-コードを変更したら必ず go test -short ./... を実行し、すべてのテストがパスすることを確認してから完了報告を行うこと。
+コードを変更したら必ず make check を実行し、フォーマット・リント・ユニットテストがすべてパスすることを確認してから完了報告を行うこと。
 ワークスペース管理
 タスク進行メモや設計検討の作業ファイルはメインリポジトリにコミットせず、外部ワークスペース（.ai-workspace/）で管理すること。
 5. 実装ロードマップ
