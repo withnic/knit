@@ -10,7 +10,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/withnic/knit/internal/shared/graphschema"
+	"github.com/withnic/knit/internal/graphschema"
 )
 
 // DefaultOutFile is the default name of the generated file.

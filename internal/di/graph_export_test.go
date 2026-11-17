@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/withnic/knit/internal/shared/graphschema"
+	"github.com/withnic/knit/internal/graphschema"
 )
 
 func TestBuildGraph(t *testing.T) {

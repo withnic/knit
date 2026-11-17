@@ -5,11 +5,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/withnic/knit/internal/shared/graphschema"
+	"github.com/withnic/knit/internal/graphschema"
 )
 
-// BuildGraph converts resolved injectors into the di-graph.json document
-// consumed by tia.
+// BuildGraph converts resolved injectors into the di-graph.json document.
 //
 // modulePath is the main module path; it is used to derive each provider's
 // package directory relative to the module root. Injectors are sorted by

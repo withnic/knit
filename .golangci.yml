@@ -29,21 +29,10 @@ linters:
   settings:
     depguard:
       rules:
-        # docs/04_guidelines.md: the tia package must use the standard library only.
-        tia-stdlib-only:
-          files:
-            - "**/internal/tia/**"
-          allow:
-            - $gostd
-            - github.com/withnic/knit
-          deny:
-            - pkg: golang.org/x/tools
-              desc: "tia must depend on the standard library only (go/parser, go/ast, go/token, go/format)"
-        # Everything else: no external deps beyond the approved set.
+        # docs/04_guidelines.md: no external dependencies beyond the approved set.
         main:
           files:
             - $all
-            - "!**/internal/tia/**"
           allow:
             - $gostd
             - github.com/withnic/knit

@@ -44,13 +44,7 @@ check: tidy-check fmt-check lint test ## CI gate: verify go.mod tidy, formatting
 
 .PHONY: build
 build: ## Build the knit binary into ./bin
-	@if [ -d "$(CMD_PKG)" ]; then \
-		$(GO) build $(GOFLAGS) -trimpath -ldflags '$(LDFLAGS)' -o $(BIN_DIR)/$(BINARY) $(CMD_PKG); \
-		echo "built $(BIN_DIR)/$(BINARY)"; \
-	else \
-		echo "$(CMD_PKG) does not exist yet (Phase 4); compiling packages only"; \
-		$(GO) build $(GOFLAGS) $(PKGS); \
-	fi
+	$(GO) build $(GOFLAGS) -trimpath -ldflags '$(LDFLAGS)' -o $(BIN_DIR)/$(BINARY) $(CMD_PKG)
 
 .PHONY: install
 install: ## Install the knit binary into $GOBIN
@@ -63,7 +57,7 @@ test: ## Run unit (Small) tests only: go test -short
 	$(GO) test $(GOFLAGS) -short $(PKGS)
 
 .PHONY: test-all
-test-all: ## Run all tests including integration (Medium) tests
+test-all: ## Run all tests including end-to-end (Medium) tests
 	$(GO) test $(GOFLAGS) $(PKGS)
 
 .PHONY: test-race

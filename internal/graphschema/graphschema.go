@@ -1,7 +1,9 @@
-// Package graphschema defines the .knit/di-graph.json format shared by the
-// gen stage (writer) and the tia stage (reader).
+// Package graphschema defines the .knit/di-graph.json format written by
+// knit gen.
 //
-// See docs/02_data_models.md §2 for the specification.
+// The file records which providers and types every injector depends on. It
+// is a stable, versioned output for external tools (e.g. test impact
+// analysis); see docs/02_data_models.md §2 for the specification.
 package graphschema
 
 import (
