@@ -43,9 +43,9 @@ Fast Feedback を実現するため、Small（ユニット）テストと Medium
 
 - **高速性の維持**: `go test -short ./...` の全件が 1 秒を超えてはならない。`packages.Load` はテストバイナリごとに 1 回にまとめ、追加のロードが必要なテストは `testing.Short()` でスキップする。
 - **テスト構造**: 原則としてテーブル駆動テストで書く。
-- **フィクスチャ**: `internal/di/testdata/fixture`（独立モジュール `example.com/fixture`）と、google/wire のスタブ `internal/di/testdata/wire` を使う。テストは `GOWORK=off GOFLAGS=-mod=mod GOPROXY=off` でネットワークなしに実行する。
+- **フィクスチャ**: 主なフィクスチャは wire モードの `internal/di/testdata/fixture`（独立モジュール `example.com/fixture`、google/wire のスタブ `internal/di/testdata/wire`）。knit モードは `internal/di/testdata/knitfixture` を使い、マーカーパッケージのスタブはリポジトリ直下の実物の `knit.go` からテスト時に一時ディレクトリへ組み立てる（実 API とずれないように）。テストは `GOWORK=off GOFLAGS=-mod=mod GOPROXY=off` でネットワークなしに実行する。
 - **ゴールデンファイル**: 生成コードは `internal/di/testdata/golden/*.golden` と比較する。意図した変更は `go test ./internal/di -run TestGenerateFile_Golden -update` で更新し、差分をレビューする。
-- **コンパイル可能性の検証**: 生成コードは、パッケージの非 `wireinject` ファイルと合わせて `go/types` で型チェックする。
+- **コンパイル可能性の検証**: 生成コードは、パッケージの Injector 宣言以外のファイル（タグなしで build されるファイル）と合わせて `go/types` で型チェックする。
 
 ### Medium テストのガイドライン
 
@@ -77,6 +77,7 @@ Fast Feedback を実現するため、Small（ユニット）テストと Medium
 | 観点 | 期待する動作 |
 |---|---|
 | ビルドタグ | `//go:build wireinject` 付きの `wire.go` を正しくロード・解析し、古い `wire_gen.go`（`!wireinject`）は無視する |
+| モード | デフォルトの knit モードで `knit.Build` / `knit.NewSet` / `knit.Bind` を解析し、`!knitinject` 付きの `knit_gen.go` を生成・実行できる。`-mode=wire` で wire と同じ入出力になる。各モードはもう一方の宣言を拾わず、もう一方のモードを示すエラーを返す |
 | LIFO クリーンアップ | `(T, func(), error)` のプロバイダが途中で失敗した場合、成功済みのクリーンアップが逆順に呼ばれる（実行して確認） |
 | 同名型 | 別パッケージの同名型（`pkga.Config`、`pkgb.Config`）が衝突せずに解決・採番される |
 | 名前衝突 | 同名パッケージ、`v1` という名前のパッケージ、引数名・パッケージレベルの識別子と衝突しない import 名・変数名が付く |

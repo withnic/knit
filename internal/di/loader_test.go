@@ -33,7 +33,7 @@ func loadFixture(t *testing.T) (loader *Loader, pkgs map[string]*packages.Packag
 			return
 		}
 		env := append(os.Environ(), "GOWORK=off", "GOFLAGS=-mod=mod", "GOPROXY=off")
-		fixture.loader = NewLoader(dir, env)
+		fixture.loader = NewLoader(WireMode, dir, env)
 		pkgs, err := fixture.loader.Load(context.Background(), "./...")
 		if err != nil {
 			fixture.err = err
@@ -307,7 +307,7 @@ func TestLoadInjectors_LazyCrossPackageSet(t *testing.T) {
 	t.Setenv("GOWORK", "off")
 	t.Setenv("GOFLAGS", "-mod=mod")
 	t.Setenv("GOPROXY", "off")
-	injs, err := LoadInjectors(context.Background(), dir, "./samename/di")
+	injs, err := LoadInjectors(context.Background(), WireMode, dir, "./samename/di")
 	if err != nil {
 		t.Fatalf("LoadInjectors() error = %v", err)
 	}

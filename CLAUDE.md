@@ -4,9 +4,11 @@
 
 ## 1. プロジェクト概要
 
-knit は、アーカイブされた google/wire の軽量なドロップイン代替となる Go 製の DI コードジェネレータです。
+knit は、アーカイブされた google/wire と同じ宣言スタイルで使える Go 製の軽量な DI コードジェネレータです。
 
-- `knit gen`: `wire.Build`、`wire.NewSet`、`wire.Bind`、通常の `NewXxx` 関数とクリーンアップ関数に対応した `wire_gen.go` を生成し、依存グラフ `.knit/di-graph.json` も出力します。
+- `knit gen`: Injector を解析してコードを生成し、依存グラフ `.knit/di-graph.json` も出力します。`Build` / `NewSet` / `Bind`、通常の `NewXxx` 関数とクリーンアップ関数に対応します。
+  - デフォルト（knit モード）: マーカーパッケージ `github.com/withnic/knit`（リポジトリ直下の `knit.go`）、`//go:build knitinject`、出力 `knit_gen.go`。
+  - `-mode=wire`: google/wire と同じ入出力（`github.com/google/wire`、`//go:build wireinject`、`wire_gen.go`）。
 - `knit version`: バージョンを表示します。
 
 ## 2. 必須参照ドキュメント
@@ -38,7 +40,8 @@ make build      # bin/knit のビルド
 ## 4. 開発・実装ルール
 
 - **スコープ厳守**: `wire.Struct` や `wire.Value` などの対象外機能は実装しないこと。
-- **依存の制限**: 外部依存は `golang.org/x/tools/go/packages` のみ。
+- **依存の制限**: 外部依存は `golang.org/x/tools/go/packages` のみ。マーカーパッケージ（`knit.go`）は依存なしに保つこと。
+- **モードの対称性**: モードによって変えるのはマーカーパッケージ・ビルドタグ・出力ファイル名だけにし、解決・生成ロジックはモード間で共通に保つこと。
 - **検証の徹底**: コードを変更したら必ず `make check` を実行し、フォーマット・リント・ユニットテストがすべてパスすることを確認してから完了報告を行うこと。生成コードに影響する変更では `make test-all` も実行すること。
 - **ゴールデンファイル**: 生成コードを意図的に変えた場合は `-update` でゴールデンファイルを更新し、差分を確認すること。
 - **ワークスペース管理**: タスク進行メモや設計検討の作業ファイルはメインリポジトリにコミットせず、外部ワークスペース（`.ai-workspace/`）で管理すること。

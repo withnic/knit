@@ -33,6 +33,7 @@ func TestRun_Usage(t *testing.T) {
 		{name: "unknown command", args: []string{"build"}, wantCode: exitUsage, wantErrOut: `unknown command "build"`},
 		{name: "gen -h", args: []string{"gen", "-h"}, wantCode: exitOK, wantErrOut: "-graph-out"},
 		{name: "gen bad flag", args: []string{"gen", "-nope"}, wantCode: exitUsage, wantErrOut: "flag provided but not defined"},
+		{name: "gen bad mode", args: []string{"gen", "-mode=dagger"}, wantCode: exitUsage, wantErrOut: `unknown mode "dagger"`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -56,14 +57,12 @@ func write(t *testing.T, dir, rel, content string) {
 	}
 }
 
-// genModule is a small application using a local stub of
-// github.com/google/wire.
-var genModule = map[string]string{
-	"go.mod":                  "module example.com/pipe\n\ngo 1.27\n\nrequire github.com/google/wire v0.0.0\n\nreplace github.com/google/wire => ./third_party/wire\n",
-	"third_party/wire/go.mod": "module github.com/google/wire\n\ngo 1.27\n",
-	"third_party/wire/wire.go": "package wire\n\nfunc Build(...interface{}) string { return \"\" }\n\n" +
-		"type ProviderSet struct{}\n\nfunc NewSet(...interface{}) ProviderSet { return ProviderSet{} }\n",
-	"store/store.go": `package store
+// genModule returns a small application whose injector is declared in the
+// given mode's dialect, with a local stub of the marker package.
+func genModule(t *testing.T, mode string) map[string]string {
+	t.Helper()
+	files := map[string]string{
+		"store/store.go": `package store
 
 type Store struct{ closed bool }
 
@@ -74,7 +73,7 @@ func NewStore() (*Store, func(), error) {
 
 func (s *Store) Get() string { return "world" }
 `,
-	"svc/svc.go": `package svc
+		"svc/svc.go": `package svc
 
 import "example.com/pipe/store"
 
@@ -84,21 +83,7 @@ func NewSvc(st *store.Store) *Svc { return &Svc{st: st} }
 
 func (s *Svc) Hello() string { return "hello " + s.st.Get() }
 `,
-	"di/wire.go": `//go:build wireinject
-
-package di
-
-import (
-	"example.com/pipe/store"
-	"example.com/pipe/svc"
-	"github.com/google/wire"
-)
-
-func InitializeSvc() (*svc.Svc, func(), error) {
-	panic(wire.Build(store.NewStore, svc.NewSvc))
-}
-`,
-	"di/di_test.go": `package di
+		"di/di_test.go": `package di
 
 import "testing"
 
@@ -113,63 +98,111 @@ func TestInitializeSvc(t *testing.T) {
 	}
 }
 `,
+	}
+	var markerPath, markerSrc string
+	switch mode {
+	case "knit":
+		markerPath = "github.com/withnic/knit"
+		src, err := os.ReadFile(filepath.Join("..", "..", "knit.go"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		markerSrc = string(src)
+	case "wire":
+		markerPath = "github.com/google/wire"
+		markerSrc = "package wire\n\nfunc Build(...interface{}) string { return \"\" }\n\n" +
+			"type ProviderSet struct{}\n\nfunc NewSet(...interface{}) ProviderSet { return ProviderSet{} }\n"
+	}
+	files["go.mod"] = "module example.com/pipe\n\ngo 1.27\n\nrequire " + markerPath + " v0.0.0\n\nreplace " + markerPath + " => ./third_party/marker\n"
+	files["third_party/marker/go.mod"] = "module " + markerPath + "\n\ngo 1.27\n"
+	files["third_party/marker/marker.go"] = markerSrc
+	files["di/"+mode+".go"] = `//go:build ` + mode + `inject
+
+package di
+
+import (
+	"example.com/pipe/store"
+	"example.com/pipe/svc"
+	"` + markerPath + `"
+)
+
+func InitializeSvc() (*svc.Svc, func(), error) {
+	panic(` + mode + `.Build(store.NewStore, svc.NewSvc))
+}
+`
+	return files
 }
 
-// TestGen_EndToEnd runs knit gen the way a user would: -dry-run prints
-// without writing, gen writes wire_gen.go and the graph, a second run is a
-// no-op, and the generated injector compiles and works.
+// TestGen_EndToEnd runs knit gen the way a user would, in both modes:
+// -dry-run prints without writing, gen writes the generated file and the
+// graph, a second run is a no-op, and the generated injector compiles and
+// works.
 func TestGen_EndToEnd(t *testing.T) {
 	if testing.Short() {
 		t.Skip("runs go list / go test")
 	}
-	dir := t.TempDir()
-	for rel, content := range genModule {
-		write(t, dir, rel, content)
+	tests := []struct {
+		mode    string
+		args    []string // mode flags
+		outFile string
+	}{
+		{mode: "knit", args: nil, outFile: "knit_gen.go"},
+		{mode: "wire", args: []string{"-mode=wire"}, outFile: "wire_gen.go"},
 	}
-	t.Setenv("GOWORK", "off")
-	t.Setenv("GOFLAGS", "-mod=mod")
-	t.Setenv("GOPROXY", "off")
-	t.Chdir(dir)
+	for _, tt := range tests {
+		t.Run(tt.mode, func(t *testing.T) {
+			dir := t.TempDir()
+			for rel, content := range genModule(t, tt.mode) {
+				write(t, dir, rel, content)
+			}
+			t.Setenv("GOWORK", "off")
+			t.Setenv("GOFLAGS", "-mod=mod")
+			t.Setenv("GOPROXY", "off")
+			t.Chdir(dir)
+			gen := func(extra ...string) []string { return append(append([]string{"gen"}, tt.args...), extra...) }
+			outRel := "di/" + tt.outFile
 
-	code, out, errOut := runCLI(t, "gen", "-dry-run", "./...")
-	if code != exitOK || !strings.Contains(out, "// ==> di/wire_gen.go <==\n// Code generated by knit. DO NOT EDIT.") {
-		t.Fatalf("gen -dry-run = %d\nstdout: %s\nstderr: %s", code, out, errOut)
-	}
-	if _, err := os.Stat(filepath.Join(dir, "di", "wire_gen.go")); !os.IsNotExist(err) {
-		t.Fatalf("gen -dry-run wrote wire_gen.go (stat err = %v)", err)
-	}
+			code, out, errOut := runCLI(t, gen("-dry-run", "./...")...)
+			if code != exitOK || !strings.Contains(out, "// ==> "+outRel+" <==\n// Code generated by knit. DO NOT EDIT.\n\n//go:build !"+tt.mode+"inject\n") {
+				t.Fatalf("gen -dry-run = %d\nstdout: %s\nstderr: %s", code, out, errOut)
+			}
+			if _, err := os.Stat(filepath.Join(dir, outRel)); !os.IsNotExist(err) {
+				t.Fatalf("gen -dry-run wrote %s (stat err = %v)", outRel, err)
+			}
 
-	code, _, errOut = runCLI(t, "gen")
-	if code != exitOK || !strings.Contains(errOut, "wrote di/wire_gen.go") || !strings.Contains(errOut, "wrote .knit/di-graph.json") {
-		t.Fatalf("gen = %d\nstderr: %s", code, errOut)
-	}
-	g, err := graphschema.ReadFile(filepath.Join(dir, graphschema.DefaultPath))
-	if err != nil {
-		t.Fatalf("reading graph: %v", err)
-	}
-	if len(g.Injectors) != 1 || g.Injectors[0].Name != "InitializeSvc" || len(g.Injectors[0].Dependencies) != 2 {
-		t.Errorf("graph = %+v, want InitializeSvc with 2 dependencies", g.Injectors)
-	}
+			code, _, errOut = runCLI(t, gen()...)
+			if code != exitOK || !strings.Contains(errOut, "wrote "+outRel) || !strings.Contains(errOut, "wrote .knit/di-graph.json") {
+				t.Fatalf("gen = %d\nstderr: %s", code, errOut)
+			}
+			g, err := graphschema.ReadFile(filepath.Join(dir, graphschema.DefaultPath))
+			if err != nil {
+				t.Fatalf("reading graph: %v", err)
+			}
+			if len(g.Injectors) != 1 || g.Injectors[0].Name != "InitializeSvc" || len(g.Injectors[0].Dependencies) != 2 {
+				t.Errorf("graph = %+v, want InitializeSvc with 2 dependencies", g.Injectors)
+			}
 
-	first, err := os.ReadFile(filepath.Join(dir, "di", "wire_gen.go"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if code, _, errOut = runCLI(t, "gen", "-graph-out", ""); code != exitOK {
-		t.Fatalf("second gen = %d\nstderr: %s", code, errOut)
-	}
-	second, err := os.ReadFile(filepath.Join(dir, "di", "wire_gen.go"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(first, second) {
-		t.Errorf("regenerated wire_gen.go differs:\n%s\n---\n%s", first, second)
-	}
+			first, err := os.ReadFile(filepath.Join(dir, outRel))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if code, _, errOut = runCLI(t, gen("-graph-out", "")...); code != exitOK {
+				t.Fatalf("second gen = %d\nstderr: %s", code, errOut)
+			}
+			second, err := os.ReadFile(filepath.Join(dir, outRel))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(first, second) {
+				t.Errorf("regenerated %s differs:\n%s\n---\n%s", outRel, first, second)
+			}
 
-	cmd := exec.Command("go", "test", "-count=1", "./di")
-	cmd.Dir = dir
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("go test ./di: %v\n%s", err, out)
+			cmd := exec.Command("go", "test", "-count=1", "./di")
+			cmd.Dir = dir
+			if out, err := cmd.CombinedOutput(); err != nil {
+				t.Fatalf("go test ./di: %v\n%s", err, out)
+			}
+		})
 	}
 }
 
@@ -185,7 +218,7 @@ func TestGen_ErrorExitCode(t *testing.T) {
 	t.Setenv("GOPROXY", "off")
 	t.Chdir(dir)
 	code, _, errOut := runCLI(t, "gen")
-	if code != exitError || !strings.Contains(errOut, "no injectors found") {
+	if code != exitError || !strings.Contains(errOut, "no injectors found") || !strings.Contains(errOut, "-mode=wire") {
 		t.Errorf("gen = %d, stderr: %s", code, errOut)
 	}
 }

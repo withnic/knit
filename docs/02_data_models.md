@@ -21,7 +21,7 @@ knit はデータベースを持たず、Go の AST・型情報から抽出す�
 
 ### 1.2 BindingSpec
 
-`wire.Bind(new(Iface), new(Impl))` によるインターフェースと具象型の対応です。
+`Bind(new(Iface), new(Impl))`（`knit.Bind` / `wire.Bind`）によるインターフェースと具象型の対応です。
 
 | フィールド | 型 | 説明 |
 |---|---|---|
@@ -30,18 +30,18 @@ knit はデータベースを持たず、Go の AST・型情報から抽出す�
 
 ### 1.3 InjectorSpec
 
-`wire.Build(...)` を含む Injector 関数の定義です。
+`Build(...)`（`knit.Build` / `wire.Build`）を含む Injector 関数の定義です。
 
 | フィールド | 型 | 説明 |
 |---|---|---|
 | `FuncName` | string | 生成する関数名（例: `InitializeUserHandler`） |
 | `PkgPath` / `PkgName` | string | 出力先パッケージの import パスとパッケージ名 |
-| `FilePath` | string | 宣言元のファイル（`wire.go` など）のパス |
+| `FilePath` | string | 宣言元のファイル（`knit.go`、`wire.go` など）のパス |
 | `Params` | []ParamSpec | Injector 自身が受け取る引数（例: `ctx context.Context`）。同じ型の引数の重複はエラー |
 | `ReturnType` | TypeKey | 構築対象のルート型 |
 | `HasCleanup` | bool | Injector がクリーンアップ関数を返すか |
 | `HasError` | bool | Injector が `error` を返すか |
-| `Providers` | []ProviderNode | `wire.NewSet` を平坦化した有効なプロバイダ一覧（ID 順） |
+| `Providers` | []ProviderNode | `NewSet` を平坦化した有効なプロバイダ一覧（ID 順） |
 | `Bindings` | []BindingSpec | 有効な Bind 一覧（InterfaceType 順） |
 | `Func` | *types.Func | Loader が設定する型チェック済みの Injector 宣言。コード生成時のシグネチャ・import・ゼロ値の描画に使う（手組みの Spec では nil） |
 
@@ -68,9 +68,20 @@ knit はデータベースを持たず、Go の AST・型情報から抽出す�
 | `ValueRef` | 値の供給元。`Kind` が `FromParam`（Injector 引数）または `FromProvider`（先行ステップ）、`BoundFrom` は Bind 元の具象型 |
 | `ResolveError` | 解決エラー。`Injector`、`Kind`（provider not found / duplicate provider / circular dependency / cleanup・error の不足）、`Chain`（ルート型から失敗した型までの依存チェーン） |
 
+### 1.6 Mode (`internal/di/mode.go`)
+
+宣言の方言を表します。ロード時のマーカーパッケージ・ビルドタグと、生成ファイルのビルド制約・ファイル名を決めます。ゼロ値は `KnitMode` として扱います。
+
+| フィールド | 型 | 説明 | `KnitMode` | `WireMode` |
+|---|---|---|---|---|
+| `Name` | string | モード名（`-mode` の値、エラーメッセージ上の表記） | `knit` | `wire` |
+| `MarkerPkgPath` | string | `Build` / `NewSet` / `Bind` を提供するパッケージ | `github.com/withnic/knit` | `github.com/google/wire` |
+| `InjectTag` | string | Injector ファイルのビルドタグ（生成ファイルはその否定） | `knitinject` | `wireinject` |
+| `OutFile` | string | デフォルトの生成ファイル名 | `knit_gen.go` | `wire_gen.go` |
+
 ## 2. 依存グラフ JSON スキーマ (`.knit/di-graph.json`)
 
-`knit gen` が出力するファイルです。各 Injector がどの型・プロバイダに依存しているかを記録します。外部ツール向けの安定した出力であり、フォーマットを変更する場合は `version` を上げます。型定義は `internal/graphschema` にあります。
+`knit gen` が出力するファイルです（モードによらず同じ形式）。各 Injector がどの型・プロバイダに依存しているかを記録します。外部ツール向けの安定した出力であり、フォーマットを変更する場合は `version` を上げます。型定義は `internal/graphschema` にあります。
 
 ```json
 {
@@ -113,6 +124,6 @@ knit はデータベースを持たず、Go の AST・型情報から抽出す�
 | `dependencies[].provider` | その型を提供するプロバイダ関数の ID |
 | `dependencies[].pkg_path` | プロバイダのパッケージの import パス |
 | `dependencies[].pkg_dir` | プロバイダのパッケージのモジュールルートからの相対ディレクトリ（`./internal/handler`、ルートは `.`、モジュール外は空） |
-| `dependencies[].bound_from` | `wire.Bind` によって満たされたインターフェースの場合、束縛元の具象型（省略可） |
+| `dependencies[].bound_from` | `Bind` によって満たされたインターフェースの場合、束縛元の具象型（省略可） |
 
-`dependencies` には、プロバイダ呼び出しごとのエントリに加え、`wire.Bind` 経由で満たされたインターフェースごとに `bound_from` 付きのエントリが追加されます（Injector 引数から供給される型は含みません）。
+`dependencies` には、プロバイダ呼び出しごとのエントリに加え、`Bind` 経由で満たされたインターフェースごとに `bound_from` 付きのエントリが追加されます（Injector 引数から供給される型は含みません）。

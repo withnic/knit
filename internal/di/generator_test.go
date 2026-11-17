@@ -60,7 +60,7 @@ func TestGenerateFile_Golden(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.pkg, func(t *testing.T) {
 			injs, pkg := resolveFixture(t, tt.pkg)
-			got, err := GenerateFile(injs)
+			got, err := GenerateFile(WireMode, injs)
 			if err != nil {
 				t.Fatalf("GenerateFile() error = %v", err)
 			}
@@ -70,7 +70,7 @@ func TestGenerateFile_Golden(t *testing.T) {
 			for i := range injs {
 				rev[len(injs)-1-i] = injs[i]
 			}
-			again, err := GenerateFile(rev)
+			again, err := GenerateFile(WireMode, rev)
 			if err != nil {
 				t.Fatalf("GenerateFile() second run error = %v", err)
 			}
@@ -115,7 +115,7 @@ func typeCheckGenerated(t *testing.T, pkg *packages.Package, src []byte) {
 			files = append(files, f)
 		}
 	}
-	gen, err := parser.ParseFile(pkg.Fset, DefaultOutFile, src, parser.ParseComments)
+	gen, err := parser.ParseFile(pkg.Fset, WireMode.OutFile, src, parser.ParseComments)
 	if err != nil {
 		t.Fatalf("parsing generated code: %v\n%s", err, src)
 	}
@@ -164,7 +164,7 @@ func requiresWireInject(f *ast.File) bool {
 				continue
 			}
 			without := expr.Eval(func(string) bool { return false })
-			with := expr.Eval(func(tag string) bool { return tag == wireInjectTag })
+			with := expr.Eval(func(tag string) bool { return tag == WireMode.InjectTag })
 			return with && !without
 		}
 	}
@@ -189,7 +189,7 @@ func TestGenerateFile_Errors(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := GenerateFile(tt.injs)
+			_, err := GenerateFile(WireMode, tt.injs)
 			if !errors.Is(err, ErrGenerate) || !strings.Contains(err.Error(), tt.want) {
 				t.Errorf("GenerateFile() error = %v, want ErrGenerate containing %q", err, tt.want)
 			}
@@ -233,5 +233,26 @@ func TestNamer(t *testing.T) {
 	want := []string{"cleanup1", "cleanup2", "v1", "v3", "type1", "arg"}
 	if strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Errorf("names = %v, want %v", got, want)
+	}
+}
+
+// TestGenerateFile_ModeBuildTag verifies that the generated file is guarded
+// by the negation of the mode's inject tag and that the body does not depend
+// on the mode.
+func TestGenerateFile_ModeBuildTag(t *testing.T) {
+	injs, _ := resolveFixture(t, "basic")
+	wire, err := GenerateFile(WireMode, injs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	knit, err := GenerateFile(KnitMode, injs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(knit, []byte("\n//go:build !knitinject\n")) {
+		t.Errorf("knit mode output lacks //go:build !knitinject:\n%s", knit)
+	}
+	if got := bytes.Replace(knit, []byte("!knitinject"), []byte("!wireinject"), 1); !bytes.Equal(got, wire) {
+		t.Errorf("knit and wire outputs differ beyond the build tag:\n%s\n---\n%s", knit, wire)
 	}
 }

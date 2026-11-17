@@ -14,13 +14,6 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
-// WirePkgPath is the import path of the wire marker package whose
-// Build / NewSet / Bind calls knit understands.
-const WirePkgPath = "github.com/google/wire"
-
-// wireInjectTag is the build tag that enables injector declaration files.
-const wireInjectTag = "wireinject"
-
 // loadMode is the minimal packages.Load mode needed to analyze injectors.
 const loadMode = packages.NeedName |
 	packages.NeedFiles |
@@ -42,12 +35,13 @@ var (
 	// ErrInvalidSignature is returned when a provider or injector has a result
 	// signature other than (T), (T, error), (T, func()) or (T, func(), error).
 	ErrInvalidSignature = errors.New("invalid signature")
-	// ErrInvalidBind is returned for malformed wire.Bind calls.
-	ErrInvalidBind = errors.New("invalid wire.Bind")
+	// ErrInvalidBind is returned for malformed Bind calls.
+	ErrInvalidBind = errors.New("invalid Bind")
 )
 
 // unsupportedWireFuncs lists wire functions that are intentionally out of scope
-// (docs/01_system_overview.md §2.1). They must be rejected, not implemented.
+// (docs/01_system_overview.md §2.2). They must be rejected, not implemented.
+// The knit marker package does not declare them at all.
 var unsupportedWireFuncs = map[string]string{
 	"Struct":         "write an explicit NewXxx constructor instead",
 	"Value":          "write a one-line ProvideXxx function instead",
@@ -55,27 +49,31 @@ var unsupportedWireFuncs = map[string]string{
 	"FieldsOf":       "write a one-line getter function instead",
 }
 
-// Loader loads Go packages with the wireinject build tag and extracts injector
-// specifications from them.
+// Loader loads Go packages with the mode's inject build tag and extracts
+// injector specifications from them.
 type Loader struct {
-	cfg *packages.Config
+	cfg  *packages.Config
+	mode Mode
 	// pkgs caches packages loaded with full syntax, keyed by import path.
 	pkgs map[string]*packages.Package
 }
 
-// NewLoader returns a Loader that resolves package patterns relative to dir.
-// env, when non-nil, replaces the environment of the underlying go command.
-func NewLoader(dir string, env []string) *Loader {
+// NewLoader returns a Loader for mode (the zero Mode means KnitMode) that
+// resolves package patterns relative to dir. env, when non-nil, replaces the
+// environment of the underlying go command.
+func NewLoader(mode Mode, dir string, env []string) *Loader {
+	mode = mode.orDefault()
 	if env == nil {
 		env = os.Environ()
 	}
 	return &Loader{
+		mode: mode,
 		cfg: &packages.Config{
 			Mode:       loadMode,
 			Dir:        dir,
 			Env:        env,
 			Fset:       token.NewFileSet(),
-			BuildFlags: []string{"-tags=" + wireInjectTag},
+			BuildFlags: []string{"-tags=" + mode.InjectTag},
 			Tests:      false,
 		},
 		pkgs: make(map[string]*packages.Package),
@@ -131,8 +129,8 @@ func (l *Loader) pkgWithSyntax(ctx context.Context, path string) (*packages.Pack
 
 // LoadInjectors is a convenience wrapper that loads patterns from dir and
 // returns every injector found, sorted by package path and function name.
-func LoadInjectors(ctx context.Context, dir string, patterns ...string) ([]*InjectorSpec, error) {
-	l := NewLoader(dir, nil)
+func LoadInjectors(ctx context.Context, mode Mode, dir string, patterns ...string) ([]*InjectorSpec, error) {
+	l := NewLoader(mode, dir, nil)
 	pkgs, err := l.Load(ctx, patterns...)
 	if err != nil {
 		return nil, err
@@ -149,7 +147,7 @@ func LoadInjectors(ctx context.Context, dir string, patterns ...string) ([]*Inje
 }
 
 // Injectors extracts every injector function declared in pkg, i.e. every
-// top-level function whose body calls wire.Build. The result is sorted by
+// top-level function whose body calls the mode's Build marker. The result is sorted by
 // function name. All errors found in the package are reported together.
 func (l *Loader) Injectors(ctx context.Context, pkg *packages.Package) ([]*InjectorSpec, error) {
 	var (
@@ -163,7 +161,7 @@ func (l *Loader) Injectors(ctx context.Context, pkg *packages.Package) ([]*Injec
 			if !ok || fn.Body == nil {
 				continue
 			}
-			builds := findWireCalls(pkg.TypesInfo, fn.Body, "Build")
+			builds := l.findMarkerCalls(pkg.TypesInfo, fn.Body, "Build")
 			if len(builds) == 0 {
 				continue
 			}
@@ -190,7 +188,7 @@ func (l *Loader) injector(ctx context.Context, pkg *packages.Package, filePath s
 		return nil, fmt.Errorf("%s: injector %s: %w: injectors must not be methods", pos(fn.Pos()), name, ErrUnsupported)
 	}
 	if len(builds) > 1 {
-		return nil, fmt.Errorf("%s: injector %s: %w: multiple wire.Build calls", pos(builds[1].Pos()), name, ErrUnsupported)
+		return nil, fmt.Errorf("%s: injector %s: %w: multiple %s.Build calls", pos(builds[1].Pos()), name, ErrUnsupported, l.mode.Name)
 	}
 	obj, ok := pkg.TypesInfo.Defs[fn.Name].(*types.Func)
 	if !ok {
@@ -240,15 +238,16 @@ func (l *Loader) injector(ctx context.Context, pkg *packages.Package, filePath s
 	}, nil
 }
 
-// findWireCalls returns every call to wire.<name> inside root, in source order.
-func findWireCalls(info *types.Info, root ast.Node, name string) []*ast.CallExpr {
+// findMarkerCalls returns every call to the marker function name inside
+// root, in source order.
+func (l *Loader) findMarkerCalls(info *types.Info, root ast.Node, name string) []*ast.CallExpr {
 	var calls []*ast.CallExpr
 	ast.Inspect(root, func(n ast.Node) bool {
 		call, ok := n.(*ast.CallExpr)
 		if !ok {
 			return true
 		}
-		if fn, ok := wireFuncName(info, call.Fun); ok && fn == name {
+		if fn, ok := l.markerFuncName(info, call.Fun); ok && fn == name {
 			calls = append(calls, call)
 		}
 		return true
@@ -256,8 +255,9 @@ func findWireCalls(info *types.Info, root ast.Node, name string) []*ast.CallExpr
 	return calls
 }
 
-// wireFuncName reports the wire function referenced by expr, if any.
-func wireFuncName(info *types.Info, expr ast.Expr) (string, bool) {
+// markerFuncName reports the marker package function referenced by expr, if
+// any.
+func (l *Loader) markerFuncName(info *types.Info, expr ast.Expr) (string, bool) {
 	var id *ast.Ident
 	switch e := ast.Unparen(expr).(type) {
 	case *ast.SelectorExpr:
@@ -268,13 +268,13 @@ func wireFuncName(info *types.Info, expr ast.Expr) (string, bool) {
 		return "", false
 	}
 	fn, ok := info.Uses[id].(*types.Func)
-	if !ok || fn.Pkg() == nil || fn.Pkg().Path() != WirePkgPath {
+	if !ok || fn.Pkg() == nil || fn.Pkg().Path() != l.mode.MarkerPkgPath {
 		return "", false
 	}
 	return fn.Name(), true
 }
 
-// setBuilder flattens wire.Build / wire.NewSet arguments into a set of
+// setBuilder flattens Build / NewSet arguments into a set of
 // providers and bindings.
 type setBuilder struct {
 	ctx       context.Context
@@ -299,17 +299,18 @@ func (b *setBuilder) errorf(pkg *packages.Package, p token.Pos, format string, a
 	b.errs = append(b.errs, fmt.Errorf("%s: "+format, append([]any{pkg.Fset.Position(p)}, args...)...))
 }
 
-// addExpr adds one wire.Build / wire.NewSet argument.
+// addExpr adds one Build / NewSet argument.
 func (b *setBuilder) addExpr(pkg *packages.Package, expr ast.Expr) {
 	expr = ast.Unparen(expr)
 	info := pkg.TypesInfo
 
+	marker := b.l.mode.Name
 	if call, ok := expr.(*ast.CallExpr); ok {
-		name, isWire := wireFuncName(info, call.Fun)
+		name, isMarker := b.l.markerFuncName(info, call.Fun)
 		switch {
-		case !isWire:
-			b.errorf(pkg, expr.Pos(), "%w: only provider functions, provider sets, wire.NewSet and wire.Bind are allowed, got call %s",
-				ErrUnsupported, types.ExprString(expr))
+		case !isMarker:
+			b.errorf(pkg, expr.Pos(), "%w: only provider functions, provider sets, %s.NewSet and %s.Bind are allowed, got call %s",
+				ErrUnsupported, marker, marker, types.ExprString(expr))
 		case name == "NewSet":
 			for _, arg := range call.Args {
 				b.addExpr(pkg, arg)
@@ -321,7 +322,7 @@ func (b *setBuilder) addExpr(pkg *packages.Package, expr ast.Expr) {
 			if !known {
 				hint = "it is not part of knit's supported subset"
 			}
-			b.errorf(pkg, expr.Pos(), "%w: wire.%s is not supported by knit; %s", ErrUnsupported, name, hint)
+			b.errorf(pkg, expr.Pos(), "%w: %s.%s is not supported by knit; %s", ErrUnsupported, marker, name, hint)
 		}
 		return
 	}
@@ -353,7 +354,7 @@ func (b *setBuilder) addExpr(pkg *packages.Package, expr ast.Expr) {
 }
 
 // addSetVar expands a package-level provider set variable, e.g.
-// `var Set = wire.NewSet(...)`, which may live in another package.
+// `var Set = knit.NewSet(...)`, which may live in another package.
 func (b *setBuilder) addSetVar(pkg *packages.Package, ref ast.Expr, v *types.Var) {
 	if v.Pkg() == nil || v.Parent() != v.Pkg().Scope() {
 		b.errorf(pkg, ref.Pos(), "%w: %s must be a package-level provider set variable", ErrUnsupported, types.ExprString(ref))
@@ -374,7 +375,7 @@ func (b *setBuilder) addSetVar(pkg *packages.Package, ref ast.Expr, v *types.Var
 	}
 	value := findVarValue(declPkg, v.Name())
 	if value == nil {
-		b.errorf(pkg, ref.Pos(), "%w: provider set %s must be initialized with wire.NewSet(...)", ErrUnsupported, key)
+		b.errorf(pkg, ref.Pos(), "%w: provider set %s must be initialized with %s.NewSet(...)", ErrUnsupported, key, b.l.mode.Name)
 		return
 	}
 	b.addExpr(declPkg, value)
@@ -402,7 +403,7 @@ func findVarValue(pkg *packages.Package, name string) ast.Expr {
 	return nil
 }
 
-// addBind handles wire.Bind(new(Iface), new(Impl)).
+// addBind handles Bind(new(Iface), new(Impl)).
 func (b *setBuilder) addBind(pkg *packages.Package, call *ast.CallExpr) {
 	if len(call.Args) != 2 {
 		b.errorf(pkg, call.Pos(), "%w: expected 2 arguments, got %d", ErrInvalidBind, len(call.Args))

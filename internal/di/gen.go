@@ -8,16 +8,16 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/withnic/knit/internal/graphschema"
 )
 
-// DefaultOutFile is the default name of the generated file.
-const DefaultOutFile = "wire_gen.go"
-
 // GenOptions configures Gen.
 type GenOptions struct {
+	// Mode selects the injector dialect. The zero Mode means KnitMode.
+	Mode Mode
 	// Dir is the directory package patterns are resolved from. Empty means
 	// the current directory.
 	Dir string
@@ -25,7 +25,7 @@ type GenOptions struct {
 	// "./...".
 	Patterns []string
 	// OutFile is the base name of the generated file in each package
-	// directory. Empty means DefaultOutFile.
+	// directory. Empty means Mode.OutFile.
 	OutFile string
 	// Env replaces the environment of the underlying go command when non-nil.
 	Env []string
@@ -60,9 +60,10 @@ func Gen(ctx context.Context, opts GenOptions) (*GenResult, error) {
 	if len(patterns) == 0 {
 		patterns = []string{"./..."}
 	}
+	mode := opts.Mode.orDefault()
 	outFile := opts.OutFile
 	if outFile == "" {
-		outFile = DefaultOutFile
+		outFile = mode.OutFile
 	}
 	if filepath.Base(outFile) != outFile || filepath.Ext(outFile) != ".go" {
 		return nil, fmt.Errorf("output file %q must be a plain .go file name", outFile)
@@ -72,7 +73,7 @@ func Gen(ctx context.Context, opts GenOptions) (*GenResult, error) {
 		now = time.Now
 	}
 
-	l := NewLoader(opts.Dir, opts.Env)
+	l := NewLoader(mode, opts.Dir, opts.Env)
 	pkgs, err := l.Load(ctx, patterns...)
 	if err != nil {
 		return nil, err
@@ -106,7 +107,7 @@ func Gen(ctx context.Context, opts GenOptions) (*GenResult, error) {
 		return nil, errors.Join(errs...)
 	}
 	if len(resolved) == 0 {
-		return nil, fmt.Errorf("no injectors found in %v", patterns)
+		return nil, noInjectorsError(mode, patterns)
 	}
 
 	byPkg := make(map[string][]*ResolvedInjector)
@@ -122,7 +123,7 @@ func Gen(ctx context.Context, opts GenOptions) (*GenResult, error) {
 	res := &GenResult{Graph: BuildGraph(resolved, modulePath, now())}
 	for _, p := range pkgPaths {
 		injs := byPkg[p]
-		src, err := GenerateFile(injs)
+		src, err := GenerateFile(mode, injs)
 		if err != nil {
 			return nil, err
 		}
@@ -148,4 +149,17 @@ func (r *GenResult) Write(graphPath string) error {
 		return nil
 	}
 	return graphschema.WriteFile(graphPath, r.Graph)
+}
+
+// noInjectorsError explains where injectors were looked for and points at
+// the other modes, since running the wrong mode is the usual cause.
+func noInjectorsError(mode Mode, patterns []string) error {
+	var others []string
+	for _, m := range Modes {
+		if m.Name != mode.Name {
+			others = append(others, fmt.Sprintf("-mode=%s for %s.Build", m.Name, m.MarkerPkgPath))
+		}
+	}
+	return fmt.Errorf("no injectors found in %v (mode %s: looking for %s.Build in files tagged %s; use %s)",
+		patterns, mode.Name, mode.MarkerPkgPath, mode.InjectTag, strings.Join(others, ", "))
 }

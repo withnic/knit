@@ -1,5 +1,6 @@
-// Command knit is a lightweight drop-in replacement for google/wire's code
-// generator. knit gen writes wire_gen.go for every injector and the
+// Command knit is a lightweight dependency injection code generator. knit gen
+// writes knit_gen.go for every injector declared with the knit marker package
+// (or, with -mode=wire, wire_gen.go for google/wire injectors) and the
 // dependency graph .knit/di-graph.json.
 package main
 
@@ -35,10 +36,10 @@ func main() {
 	os.Exit(code)
 }
 
-const usage = `knit - wire-compatible DI code generator
+const usage = `knit - dependency injection code generator (google/wire compatible with -mode=wire)
 
 Usage:
-  knit gen [flags] [packages...]   generate wire_gen.go and .knit/di-graph.json
+  knit gen [flags] [packages...]   generate knit_gen.go (or wire_gen.go) and .knit/di-graph.json
   knit version                     print the version
 
 Run "knit <command> -h" for the flags of a command.
@@ -89,14 +90,22 @@ func parseFlags(fs *flag.FlagSet, args []string) (code int, ok bool) {
 
 func runGen(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	fs := newFlagSet("gen", "gen [flags] [packages...]", stderr)
-	out := fs.String("out", di.DefaultOutFile, "name of the generated file in each package directory")
+	modeName := fs.String("mode", di.KnitMode.Name,
+		"injector dialect: knit (knit.Build, //go:build knitinject, knit_gen.go) or wire (wire.Build, //go:build wireinject, wire_gen.go)")
+	out := fs.String("out", "", "name of the generated file in each package directory (default knit_gen.go, or wire_gen.go with -mode=wire)")
 	graphOut := fs.String("graph-out", graphschema.DefaultPath, "output path of the dependency graph JSON (empty to skip)")
 	dryRun := fs.Bool("dry-run", false, "print the generated code to stdout instead of writing files")
 	if code, ok := parseFlags(fs, args); !ok {
 		return code
 	}
 
-	res, err := di.Gen(ctx, di.GenOptions{Patterns: fs.Args(), OutFile: *out})
+	mode, err := di.ParseMode(*modeName)
+	if err != nil {
+		fmt.Fprintf(stderr, "knit gen: %v\n", err)
+		return exitUsage
+	}
+
+	res, err := di.Gen(ctx, di.GenOptions{Mode: mode, Patterns: fs.Args(), OutFile: *out})
 	if err != nil {
 		fmt.Fprintf(stderr, "knit gen: %v\n", err)
 		return exitError
