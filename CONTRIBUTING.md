@@ -4,8 +4,6 @@ English | [日本語](#日本語)
 
 Thank you for your interest in knit! Bug reports, documentation fixes and pull requests are all welcome.
 
-This project follows the [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold it.
-
 ## Before you start
 
 - **Bugs**: open an issue with the bug report template. A minimal example module that reproduces the problem helps a lot.
@@ -68,7 +66,7 @@ Common types: `feat`, `fix`, `docs`, `test`, `refactor`, `build`, `ci`, `chore`.
 
 ## Pull requests
 
-- Fill in the pull request template and link the related issue.
+- Fill in the pull request template.
 - All CI checks must pass, and a maintainer review is required before merging.
 - Pull requests are squash-merged, so the PR title should also follow Conventional Commits.
 - For first-time contributors, CI starts after a maintainer approves the run.
@@ -82,8 +80,6 @@ By contributing, you agree that your contributions are licensed under the [MIT L
 ## 日本語
 
 knit に興味を持っていただきありがとうございます。バグ報告、ドキュメントの修正、プルリクエスト、どれも歓迎します。
-
-このプロジェクトは[行動規範](CODE_OF_CONDUCT.md#コントリビューター行動規範)に従います。参加される方は、これを守ってください。
 
 ## 始める前に
 
@@ -147,7 +143,7 @@ docs: clarify migration steps
 
 ## プルリクエスト
 
-- PR テンプレートを埋めて、関連する Issue をリンクしてください。
+- PR テンプレートを埋めてください。
 - マージには、すべての CI の通過とメンテナのレビューが必要です。
 - PR はスカッシュマージするので、PR のタイトルも Conventional Commits の形式にしてください。
 - 初めて PR を出す方の場合、メンテナが承認してから CI が動きます。
