@@ -2,6 +2,7 @@ package di
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -23,6 +24,9 @@ const (
 	// ErrKindMissingError means a provider returns an error but the injector
 	// does not.
 	ErrKindMissingError
+	// ErrKindInvalidBind means a binding's concrete type does not implement
+	// its interface.
+	ErrKindInvalidBind
 )
 
 func (k ResolveErrorKind) String() string {
@@ -37,6 +41,8 @@ func (k ResolveErrorKind) String() string {
 		return "injector must return a cleanup function"
 	case ErrKindMissingError:
 		return "injector must return an error"
+	case ErrKindInvalidBind:
+		return "invalid Bind"
 	default:
 		return "unknown resolve error"
 	}
@@ -61,10 +67,24 @@ type ResolveError struct {
 //
 //	failed to resolve provider for injector 'InitializeUserService':
 //	  service.UserService -> repo.UserRepository -> *db.Pool (provider not found)
+//
+// Types whose short names are ambiguous within the chain are shown in full.
 func (e *ResolveError) Error() string {
+	owner := make(map[string]TypeKey, len(e.Chain))
+	ambiguous := make(map[string]bool)
+	for _, k := range e.Chain {
+		s := k.Short()
+		if o, seen := owner[s]; seen && o != k {
+			ambiguous[s] = true
+		}
+		owner[s] = k
+	}
 	parts := make([]string, len(e.Chain))
 	for i, k := range e.Chain {
 		parts[i] = k.Short()
+		if ambiguous[parts[i]] {
+			parts[i] = k.String()
+		}
 	}
 	reason := e.Kind.String()
 	if e.Detail != "" {
@@ -72,6 +92,14 @@ func (e *ResolveError) Error() string {
 	}
 	return fmt.Sprintf("failed to resolve provider for injector '%s':\n  %s (%s)",
 		e.Injector, strings.Join(parts, " -> "), reason)
+}
+
+// Unwrap lets errors.Is match ErrInvalidBind for invalid bindings.
+func (e *ResolveError) Unwrap() error {
+	if e.Kind == ErrKindInvalidBind {
+		return ErrInvalidBind
+	}
+	return nil
 }
 
 // SourceKind tells where a value consumed by the injector comes from.
@@ -173,9 +201,59 @@ func (r *resolver) errorf(kind ResolveErrorKind, chain []TypeKey, detail string)
 	}
 }
 
-// buildTables indexes params, providers and bindings, reporting any type that
-// is supplied by more than one source.
+// pathTo returns a shortest dependency path from the injector's root type to
+// target, considering every provider and binding, or nil if target is not
+// reachable. It works on the raw declarations, so it can explain conflicts
+// found before the lookup tables are usable.
+func (r *resolver) pathTo(target TypeKey) []TypeKey {
+	deps := make(map[TypeKey][]TypeKey)
+	for i := range r.inj.Providers {
+		p := &r.inj.Providers[i]
+		for _, param := range p.Params {
+			deps[p.OutputType] = append(deps[p.OutputType], param.Type)
+		}
+	}
+	for _, b := range r.inj.Bindings {
+		deps[b.InterfaceType] = append(deps[b.InterfaceType], b.ConcreteType)
+	}
+	root := r.inj.ReturnType
+	parent := map[TypeKey]TypeKey{root: ""}
+	for queue := []TypeKey{root}; len(queue) > 0; queue = queue[1:] {
+		t := queue[0]
+		if t == target {
+			var path []TypeKey
+			for ; t != ""; t = parent[t] {
+				path = append(path, t)
+			}
+			slices.Reverse(path)
+			return path
+		}
+		next := deps[t]
+		sort.Slice(next, func(i, j int) bool { return next[i] < next[j] })
+		for _, d := range next {
+			if _, seen := parent[d]; !seen {
+				parent[d] = t
+				queue = append(queue, d)
+			}
+		}
+	}
+	return nil
+}
+
+// buildTables indexes params, providers and bindings, reporting invalid
+// bindings and any type that is supplied by more than one source.
 func (r *resolver) buildTables() error {
+	for _, b := range r.inj.Bindings {
+		if b.Problem == "" {
+			continue
+		}
+		chain := r.pathTo(b.InterfaceType)
+		if chain == nil {
+			chain = []TypeKey{b.InterfaceType}
+		}
+		return r.errorf(ErrKindInvalidBind, append(chain, b.ConcreteType), b.Problem)
+	}
+
 	sources := make(map[TypeKey][]string)
 	for i, p := range r.inj.Params {
 		r.params[p.Type] = i
@@ -192,7 +270,7 @@ func (r *resolver) buildTables() error {
 	}
 	for _, b := range r.inj.Bindings {
 		r.bindings[b.InterfaceType] = b.ConcreteType
-		sources[b.InterfaceType] = append(sources[b.InterfaceType], "wire.Bind to "+b.ConcreteType.String())
+		sources[b.InterfaceType] = append(sources[b.InterfaceType], "Bind to "+b.ConcreteType.String())
 	}
 
 	keys := make([]TypeKey, 0, len(sources))
@@ -201,10 +279,18 @@ func (r *resolver) buildTables() error {
 	}
 	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
 	for _, t := range keys {
-		if s := sources[t]; len(s) > 1 {
-			sort.Strings(s)
-			return r.errorf(ErrKindDuplicateProvider, []TypeKey{t}, strings.Join(s, ", "))
+		s := sources[t]
+		if len(s) < 2 {
+			continue
 		}
+		sort.Strings(s)
+		detail := strings.Join(s, ", ")
+		chain := r.pathTo(t)
+		if chain == nil {
+			chain = []TypeKey{t}
+			detail += "; not needed by " + r.inj.ReturnType.Short()
+		}
+		return r.errorf(ErrKindDuplicateProvider, chain, detail)
 	}
 	return nil
 }

@@ -141,6 +141,10 @@ type BindingSpec struct {
 	InterfaceType TypeKey
 	// ConcreteType is the fully qualified implementation type (may be a pointer).
 	ConcreteType TypeKey
+	// Problem explains why ConcreteType cannot satisfy InterfaceType, including
+	// the source position of the Bind call. It is empty for valid bindings; the
+	// resolver reports invalid ones with their dependency chain.
+	Problem string
 }
 
 // InjectorSpec represents an injector function, i.e. a function whose body
