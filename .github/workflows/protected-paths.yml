@@ -1,0 +1,50 @@
+name: Protected paths
+
+# pull_request_target runs this file from the base branch, so a pull request
+# cannot weaken the check it is subject to. It must never check out or execute
+# code from the pull request.
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  protected-paths:
+    name: Protected paths approval
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write # read the changed files, withdraw a stale approval
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      EVENT_ACTION: ${{ github.event.action }}
+      APPROVED: ${{ contains(github.event.pull_request.labels.*.name, 'protected-change-approved') }}
+      APPROVAL_LABEL: protected-change-approved
+    steps:
+      - name: Require approval for changes to protected paths
+        run: |
+          changed="$(gh api --paginate "repos/$GH_REPO/pulls/$PR_NUMBER/files" \
+            --jq '.[] | .filename, (.previous_filename // empty)' |
+            grep -E '^(CLAUDE\.md$|\.github/workflows/)' | sort -u || true)"
+          if [ -z "$changed" ]; then
+            echo "No protected paths changed."
+            exit 0
+          fi
+          echo "Protected paths changed:"
+          echo "$changed"
+          if [ "$APPROVED" = "true" ] && [ "$EVENT_ACTION" = "synchronize" ]; then
+            # An approval covers only the commits a human has seen.
+            gh api -X DELETE "repos/$GH_REPO/issues/$PR_NUMBER/labels/$APPROVAL_LABEL" >/dev/null
+            APPROVED=false
+          fi
+          if [ "$APPROVED" != "true" ]; then
+            echo "::error::This PR changes CLAUDE.md or .github/workflows/. A human must review it and add the $APPROVAL_LABEL label."
+            exit 1
+          fi
+          echo "Approved with the $APPROVAL_LABEL label."
