@@ -479,11 +479,30 @@ func (b *setBuilder) addBind(pkg *packages.Package, call *ast.CallExpr) {
 		b.errorf(pkg, call.Pos(), "%w: first argument %s is not an interface type", ErrInvalidBind, NewTypeKey(iface))
 		return
 	}
+	spec := BindingSpec{InterfaceType: NewTypeKey(iface), ConcreteType: NewTypeKey(impl)}
 	if !types.Implements(impl, it) {
-		b.errorf(pkg, call.Pos(), "%w: %s does not implement %s", ErrInvalidBind, NewTypeKey(impl), NewTypeKey(iface))
-		return
+		spec.Problem = fmt.Sprintf("%s: %s", pkg.Fset.Position(call.Pos()), bindMismatch(impl, iface, it))
 	}
-	b.bindings[BindingSpec{InterfaceType: NewTypeKey(iface), ConcreteType: NewTypeKey(impl)}] = struct{}{}
+	b.bindings[spec] = struct{}{}
+}
+
+// bindMismatch explains why impl does not implement the interface iface.
+func bindMismatch(impl, iface types.Type, it *types.Interface) string {
+	implName := NewTypeKey(impl).Short()
+	msg := implName + " does not implement " + NewTypeKey(iface).Short()
+	ptr := types.NewPointer(impl)
+	if types.Implements(ptr, it) {
+		name := NewTypeKey(ptr).Short()
+		return fmt.Sprintf("%s, but %s does; use new(%s)", msg, name, name)
+	}
+	switch m, wrongType := types.MissingMethod(impl, it, true); {
+	case m == nil:
+		return msg
+	case wrongType:
+		return fmt.Sprintf("%s: method %s has a different signature", msg, m.Name())
+	default:
+		return fmt.Sprintf("%s: missing method %s", msg, m.Name())
+	}
 }
 
 func (b *setBuilder) sortedProviders() []ProviderNode {
