@@ -5,6 +5,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"sort"
@@ -12,6 +15,16 @@ import (
 	"time"
 
 	"github.com/withnic/knit/internal/graphschema"
+)
+
+// Errors about existing files in the way of, or left behind by, generation.
+var (
+	// ErrNotGenerated is returned instead of overwriting a file at the output
+	// path that is not marked as generated.
+	ErrNotGenerated = errors.New("refusing to overwrite a file that is not generated code")
+	// ErrStaleGenerated is returned for a generated file in a package that no
+	// longer declares any injector.
+	ErrStaleGenerated = errors.New("stale generated file")
 )
 
 // GenOptions configures Gen.
@@ -93,6 +106,9 @@ func Gen(ctx context.Context, opts GenOptions) (*GenResult, error) {
 			errs = append(errs, err)
 			continue
 		}
+		if len(injs) == 0 {
+			errs = append(errs, staleOutputs(p.IgnoredFiles, outFile)...)
+		}
 		for _, inj := range injs {
 			r, err := Resolve(inj)
 			if err != nil {
@@ -127,8 +143,11 @@ func Gen(ctx context.Context, opts GenOptions) (*GenResult, error) {
 		if err != nil {
 			return nil, err
 		}
-		dir := filepath.Dir(injs[0].Injector.FilePath)
-		res.Files = append(res.Files, GeneratedFile{Path: filepath.Join(dir, outFile), Content: src})
+		out := filepath.Join(filepath.Dir(injs[0].Injector.FilePath), outFile)
+		if err := checkOverwritable(out); err != nil {
+			return nil, err
+		}
+		res.Files = append(res.Files, GeneratedFile{Path: out, Content: src})
 	}
 	sort.Slice(res.Files, func(i, j int) bool { return res.Files[i].Path < res.Files[j].Path })
 	return res, nil
@@ -149,6 +168,47 @@ func (r *GenResult) Write(graphPath string) error {
 		return nil
 	}
 	return graphschema.WriteFile(graphPath, r.Graph)
+}
+
+// isGenerated reports whether src is empty or carries the standard
+// "Code generated ... DO NOT EDIT." marker, which also covers files written by
+// the wire command.
+func isGenerated(src []byte) bool {
+	if len(bytes.TrimSpace(src)) == 0 {
+		return true
+	}
+	f, err := parser.ParseFile(token.NewFileSet(), "", src, parser.PackageClauseOnly|parser.ParseComments)
+	return err == nil && ast.IsGenerated(f)
+}
+
+// checkOverwritable returns an error if path holds anything but generated code.
+func checkOverwritable(path string) error {
+	src, err := os.ReadFile(path) //nolint:gosec // the output path of this run
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("reading existing output: %w", err)
+	}
+	if !isGenerated(src) {
+		return fmt.Errorf("%w: %s; move it or choose another name with -out", ErrNotGenerated, path)
+	}
+	return nil
+}
+
+// staleOutputs reports generated output files among the files of a package
+// without injectors. They are excluded from loading by their build tag.
+func staleOutputs(ignored []string, outFile string) []error {
+	var errs []error
+	for _, path := range ignored {
+		if filepath.Base(path) != outFile {
+			continue
+		}
+		if src, err := os.ReadFile(path); err == nil && isGenerated(src) { //nolint:gosec // a file of a loaded package
+			errs = append(errs, fmt.Errorf("%w: %s: its package declares no injectors; delete the file", ErrStaleGenerated, path))
+		}
+	}
+	return errs
 }
 
 // noInjectorsError explains where injectors were looked for and points at

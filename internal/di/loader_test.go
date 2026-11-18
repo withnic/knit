@@ -264,6 +264,24 @@ func TestLoader_Rejects(t *testing.T) {
 			wantIs:    ErrUnsupported,
 			wantInMsg: []string{"injector InitializeService:", "wire.Value is not supported by knit"},
 		},
+		{
+			name:      "injector file without the inject tag",
+			pkg:       "invalid/notag",
+			wantIs:    ErrMissingBuildTag,
+			wantInMsg: []string{"injector InitializeT:", "wire.go:", "//go:build wireinject"},
+		},
+		{
+			name:      "provider declared under the inject tag",
+			pkg:       "invalid/tagged",
+			wantIs:    ErrInaccessibleProvider,
+			wantInMsg: []string{"injector InitializeT:", "tagged.NewT", "wire.go is only compiled with the wireinject tag"},
+		},
+		{
+			name:      "unexported provider of another package",
+			pkg:       "invalid/unexported/di",
+			wantIs:    ErrInaccessibleProvider,
+			wantInMsg: []string{"injector InitializeT:", "lib.newT", "it is unexported"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

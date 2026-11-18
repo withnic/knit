@@ -28,6 +28,9 @@ func TestNewTypeKey(t *testing.T) {
 		{"slice", types.NewSlice(configA), "[]github.com/org/repo/internal/pkga.Config"},
 		{"map", types.NewMap(types.Typ[types.String], types.NewPointer(configB)), "map[string]*github.com/org/repo/internal/pkgb.Config"},
 		{"basic", types.Typ[types.Int], "int"},
+		{"pointer to alias", types.NewPointer(alias), "*github.com/org/repo/internal/pkga.Config"},
+		{"slice of alias", types.NewSlice(alias), "[]github.com/org/repo/internal/pkga.Config"},
+		{"map of alias", types.NewMap(alias, alias), "map[github.com/org/repo/internal/pkga.Config]github.com/org/repo/internal/pkga.Config"},
 		{"alias resolves to target", alias, "github.com/org/repo/internal/pkga.Config"},
 		{"error", types.Universe.Lookup("error").Type(), "error"},
 	}

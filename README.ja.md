@@ -12,7 +12,7 @@
 コンストラクタを列挙するだけで、knit が呼び出し順を解決し、クリーンアップ関数やエラー処理まで含めた読みやすい普通の Go コードを生成します。リフレクションも実行時コンテナも使いません。
 
 - **knit モード（デフォルト）**: `knit.Build` / `knit.NewSet` / `knit.Bind` で宣言します。google/wire への依存は不要です。
-- **wire モード（`-mode=wire`）**: `wire` コマンドのドロップイン代替です。既存の `wire.go` をそのまま読み、同じ `wire_gen.go` を生成します。
+- **wire モード（`-mode=wire`）**: `wire` コマンドの代替です。既存の `wire.go` を読み、`wire_gen.go` を生成します。
 - **依存グラフ**: 実行のたびに `.knit/di-graph.json` も出力します。各 Injector が何に依存しているかを機械可読な形で記録したもので、テスト影響範囲解析などのツールで使えます。
 
 ## インストール
@@ -155,7 +155,7 @@ failed to resolve provider for injector 'InitializeUserService':
 
 ## google/wire からの移行
 
-**コードはそのままにする場合**: これまで `wire` を実行していたところで `knit gen -mode=wire ./...` を実行します。出力は通常の `wire_gen.go` です。
+**Injector はそのままにする場合**: これまで `wire` を実行していたところで `knit gen -mode=wire ./...` を実行します。出力は通常の `wire_gen.go` です。`wire` と異なり、`wire.go` 内のその他の宣言は出力にコピーしないため、プロバイダや通常のコードから使うものは `wireinject` タグのないファイルへ移してください。
 
 **knit モードに切り替える場合**:
 
@@ -174,6 +174,8 @@ knit は wire の機能のうち、意図的に小さなサブセットだけを
 | `wire.Value`、`wire.InterfaceValue` | 1 行の `ProvideXxx` 関数 |
 | `wire.FieldsOf` | 1 行の Getter 関数 |
 | 可変長引数（`...T`） | 明示的なスライス型（`[]T`）か専用のプロバイダ |
+| Injector 用ビルドタグ付きファイル内のプロバイダ | タグのないファイルへ移す |
+| 別パッケージの非公開プロバイダ | プロバイダを公開する |
 | メソッドやジェネリックのプロバイダ・Injector | 通常のトップレベル関数 |
 
 ## コマンドリファレンス
