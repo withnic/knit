@@ -1,0 +1,1 @@
+injector InitializeT: $FIXTURE/invalid/unexported/lib/lib.go:10:23: provider example.com/fixture/invalid/unexported/lib.newT: provider cannot be called from generated code: it is unexported and the injector is in package example.com/fixture/invalid/unexported/di; export it

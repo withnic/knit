@@ -45,7 +45,7 @@ Fast Feedback を実現するため、Small（ユニット）テストと Medium
 - **高速性の維持**: `go test -short ./...` の全件が 1 秒を超えてはならない。`packages.Load` はテストバイナリごとに 1 回にまとめ、追加のロードが必要なテストは `testing.Short()` でスキップする。
 - **テスト構造**: 原則としてテーブル駆動テストで書く。
 - **フィクスチャ**: 主なフィクスチャは wire モードの `internal/di/testdata/fixture`（独立モジュール `example.com/fixture`、google/wire のスタブ `internal/di/testdata/wire`）。knit モードは `internal/di/testdata/knitfixture` を使い、マーカーパッケージのスタブはリポジトリ直下の実物の `knit.go` からテスト時に一時ディレクトリへ組み立てる（実 API とずれないように）。テストは `GOWORK=off GOFLAGS=-mod=mod GOPROXY=off` でネットワークなしに実行する。
-- **ゴールデンファイル**: 生成コードは `internal/di/testdata/golden/*.golden` と比較する。意図した変更は `go test ./internal/di -run TestGenerateFile_Golden -update` で更新し、差分をレビューする。
+- **ゴールデンファイル**: 生成コードは `internal/di/testdata/golden/*.golden`、エラーメッセージは `golden/errors/*.golden` と比較する。意図した変更は `go test ./internal/di -run Golden -update` で更新し、差分をレビューする。`make gen-check` は再生成して差分がないことを確認する。
 - **コンパイル可能性の検証**: 生成コードは、パッケージの Injector 宣言以外のファイル（タグなしで build されるファイル）と合わせて `go/types` で型チェックする。
 
 ### Medium テストのガイドライン
@@ -88,5 +88,7 @@ Fast Feedback を実現するため、Small（ユニット）テストと Medium
 | 生成前の検証 | タグのない Injector ファイル、タグ付きファイル内のプロバイダ、別パッケージの非公開プロバイダをエラーにする |
 | 既存の出力 | 生成コードの印がない出力先は上書きしない。Injector のないパッケージの生成ファイルを報告する |
 | 型エイリアス | ポインタ・スライス・型引数の中のエイリアスも元の型と同一に扱う |
+| 戻り値パターン | プロバイダと Injector の `(T)`、`(T, error)`、`(T, func())`、`(T, func(), error)` を生成・実行できる |
+| セット合成 | ネストした `NewSet`、別パッケージのセット、セット内の `Bind` を解決できる |
 | 決定論 | 入力順を変えても生成コードがバイト単位で一致する |
 | 依存グラフ | Bind エントリに `bound_from` が付き、Injector・依存がソートされている |
