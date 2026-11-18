@@ -47,11 +47,62 @@ func (k TypeKey) Short() string {
 
 // NewTypeKey builds the normalized TypeKey for t.
 //
-// Top-level type aliases are resolved to their target so that an alias and its
-// aliased type share the same key.
+// Type aliases are resolved to their targets, including inside composite types
+// and type arguments, so that identical types share the same key.
 func NewTypeKey(t types.Type) TypeKey {
-	t = types.Unalias(t)
-	return TypeKey(types.TypeString(t, func(p *types.Package) string { return p.Path() }))
+	return TypeKey(types.TypeString(unalias(t), func(p *types.Package) string { return p.Path() }))
+}
+
+// unalias returns t with the aliases it mentions replaced by their targets.
+func unalias(t types.Type) types.Type {
+	switch t := types.Unalias(t).(type) {
+	case *types.Pointer:
+		return types.NewPointer(unalias(t.Elem()))
+	case *types.Slice:
+		return types.NewSlice(unalias(t.Elem()))
+	case *types.Array:
+		return types.NewArray(unalias(t.Elem()), t.Len())
+	case *types.Map:
+		return types.NewMap(unalias(t.Key()), unalias(t.Elem()))
+	case *types.Chan:
+		return types.NewChan(t.Dir(), unalias(t.Elem()))
+	case *types.Signature:
+		return types.NewSignatureType(nil, nil, nil, unaliasTuple(t.Params()), unaliasTuple(t.Results()), t.Variadic())
+	case *types.Struct:
+		fields := make([]*types.Var, t.NumFields())
+		tags := make([]string, t.NumFields())
+		for i := range t.NumFields() {
+			f := t.Field(i)
+			fields[i] = types.NewField(f.Pos(), f.Pkg(), f.Name(), unalias(f.Type()), f.Embedded())
+			tags[i] = t.Tag(i)
+		}
+		return types.NewStruct(fields, tags)
+	case *types.Named:
+		targs := t.TypeArgs()
+		if targs.Len() == 0 {
+			return t
+		}
+		args := make([]types.Type, targs.Len())
+		for i := range targs.Len() {
+			args[i] = unalias(targs.At(i))
+		}
+		inst, err := types.Instantiate(nil, t.Origin(), args, false)
+		if err != nil {
+			return t
+		}
+		return inst
+	default:
+		return t
+	}
+}
+
+func unaliasTuple(t *types.Tuple) *types.Tuple {
+	vars := make([]*types.Var, t.Len())
+	for i := range t.Len() {
+		v := t.At(i)
+		vars[i] = types.NewParam(v.Pos(), v.Pkg(), v.Name(), unalias(v.Type()))
+	}
+	return types.NewTuple(vars...)
 }
 
 // ParamSpec describes one parameter of a provider or injector function.

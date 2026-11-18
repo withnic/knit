@@ -12,7 +12,7 @@ English | [日本語](README.ja.md)
 You list your constructors once; knit works out the order to call them in and writes plain, readable Go code that wires everything together, including cleanup functions and error handling. There is no reflection and no runtime container.
 
 - **Native mode (default)**: declare injectors with `knit.Build` / `knit.NewSet` / `knit.Bind`. No dependency on google/wire.
-- **wire mode (`-mode=wire`)**: a drop-in replacement for the `wire` command. It reads your existing `wire.go` files and writes the same `wire_gen.go`.
+- **wire mode (`-mode=wire`)**: a replacement for the `wire` command. It reads your existing `wire.go` files and writes `wire_gen.go`.
 - **Dependency graph**: every run also writes `.knit/di-graph.json`, a machine-readable record of what each injector depends on (for tooling such as test impact analysis).
 
 ## Install
@@ -155,7 +155,7 @@ The two modes differ only in the marker package, the build tag and the output fi
 
 ## Migrating from google/wire
 
-**Keep your code as is**: run `knit gen -mode=wire ./...` wherever you ran `wire`. The output is a regular `wire_gen.go`.
+**Keep your injectors**: run `knit gen -mode=wire ./...` wherever you ran `wire`. The output is a regular `wire_gen.go`. Unlike `wire`, knit does not copy other declarations from `wire.go` into the output, so move providers and anything your regular code uses to a file without the `wireinject` tag.
 
 **Switch to native mode**:
 
@@ -175,6 +175,8 @@ knit deliberately supports a small subset of wire. These features are rejected w
 | `wire.FieldsOf` | A one-line getter function |
 | Variadic parameters (`...T`) | An explicit slice type (`[]T`) or a dedicated provider |
 | Method or generic providers and injectors | A plain top-level function |
+| Providers declared in a file with the inject build tag | Move them to a file without the tag |
+| Unexported providers of another package | Export the provider |
 
 ## Command reference
 
@@ -192,7 +194,7 @@ knit version                     print the version
 
 Exit codes: `0` success, `1` analysis or generation error, `2` usage error.
 
-Files whose content has not changed are not rewritten. The format of `di-graph.json` is described in [docs/02_data_models.md](docs/02_data_models.md) (Japanese).
+Files whose content has not changed are not rewritten. knit refuses to overwrite an output file that is not marked as generated, and reports generated files left in packages that no longer declare injectors. The format of `di-graph.json` is described in [docs/02_data_models.md](docs/02_data_models.md) (Japanese).
 
 ## Contributing
 

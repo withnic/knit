@@ -7,7 +7,7 @@
 google/wire が公式にアーカイブされたことを受け、wire と同じ宣言スタイル（Injector 関数に `Build(...)` を書き、プロバイダを列挙する）で使える軽量な DI コードジェネレータ **knit** を提供します。
 
 - **knit モード（デフォルト）**: knit 自身のマーカーパッケージ `github.com/withnic/knit`（`knit.Build` / `knit.NewSet` / `knit.Bind`）で宣言し、`knit_gen.go` を生成します。google/wire への依存は不要です。
-- **wire モード（`-mode=wire`）**: google/wire と同じ入出力（`wire.Build`、`//go:build wireinject`、`wire_gen.go`）のドロップイン代替です。既存の wire プロジェクトを修正なしでそのまま扱えます。
+- **wire モード（`-mode=wire`）**: google/wire と同じ入出力（`wire.Build`、`//go:build wireinject`、`wire_gen.go`）の代替です。ただし `wire.go` 内の Injector 以外の宣言は出力にコピーしません。
 
 両モードの生成ロジックは共通で、違いは「マーカーパッケージ」「ビルドタグ」「出力ファイル名」だけです。
 
@@ -71,6 +71,7 @@ func InitializeServer(ctx context.Context) (*Server, func(), error) {
 | `wire.FieldsOf` | 1 行の Getter 関数を書く |
 | 可変長引数（`...T`）を持つプロバイダ・Injector | 明示的なスライス型（`[]T`）や専用プロバイダに置き換える |
 | メソッドの Injector・プロバイダ、ジェネリックなプロバイダ・Injector、1 関数内の複数の `Build` | 通常の関数に書き換える |
+| Injector 用ビルドタグ付きファイル内のプロバイダ、別パッケージの非公開プロバイダ | タグのないファイルへ移す、公開する |
 
 ## 3. CLI インターフェース仕様
 
@@ -88,7 +89,7 @@ knit version
 | `-graph-out` | string | `.knit/di-graph.json` | 依存グラフ JSON の出力先。空文字で出力しない |
 | `-dry-run` | bool | `false` | ファイルを書き込まず、生成コードを標準出力に表示する（`// ==> パス <==` 区切り） |
 
-書き込んだファイルの一覧は標準エラーに出力します。Injector が 1 つも見つからない場合は、探したマーカーパッケージ・ビルドタグと、もう一方のモードを示すエラーを返します（モードの指定忘れに気付けるように）。
+Injector 宣言ファイルにはモードのビルドタグが必須です。出力先に生成コードの印がないファイルがある場合は上書きせずエラーにし、Injector がなくなったパッケージに残る生成ファイルもエラーで報告します。書き込んだファイルの一覧は標準エラーに出力します。Injector が 1 つも見つからない場合は、探したマーカーパッケージ・ビルドタグと、もう一方のモードを示すエラーを返します（モードの指定忘れに気付けるように）。
 
 ### 終了コード
 
