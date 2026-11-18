@@ -255,6 +255,58 @@ func TestResolve_Errors(t *testing.T) {
 			wantInMsg: []string{"injector parameter a"},
 		},
 		{
+			name: "duplicate reports the path from the root",
+			inj: InjectorSpec{
+				FuncName:   "Init",
+				ReturnType: "*ex.com/x.Root",
+				Providers: []ProviderNode{
+					prov("ex.com/x.NewRoot", "*ex.com/x.Root", "*ex.com/x.Mid"),
+					prov("ex.com/x.NewMid", "*ex.com/x.Mid", "ex.com/x.I"),
+					prov("ex.com/x.NewI", "ex.com/x.I"),
+					prov("ex.com/x.NewImpl", "*ex.com/x.Impl"),
+				},
+				Bindings: []BindingSpec{{InterfaceType: "ex.com/x.I", ConcreteType: "*ex.com/x.Impl"}},
+			},
+			wantKind:  ErrKindDuplicateProvider,
+			wantChain: []TypeKey{"*ex.com/x.Root", "*ex.com/x.Mid", "ex.com/x.I"},
+			wantMsg: "failed to resolve provider for injector 'Init':\n" +
+				"  *x.Root -> *x.Mid -> x.I (duplicate provider: Bind to *ex.com/x.Impl, ex.com/x.NewI)",
+		},
+		{
+			name: "duplicate the root does not need",
+			inj: InjectorSpec{FuncName: "Init", ReturnType: "*ex.com/x.Root", Providers: []ProviderNode{
+				prov("ex.com/x.NewRoot", "*ex.com/x.Root"),
+				prov("ex.com/x.NewA", "*ex.com/x.A"),
+				prov("ex.com/x.NewA2", "*ex.com/x.A"),
+			}},
+			wantKind:  ErrKindDuplicateProvider,
+			wantChain: []TypeKey{"*ex.com/x.A"},
+			wantInMsg: []string{"not needed by *x.Root"},
+		},
+		{
+			name: "invalid binding reports the path from the root",
+			inj: InjectorSpec{
+				FuncName:   "Init",
+				ReturnType: "*ex.com/x.Root",
+				Providers:  []ProviderNode{prov("ex.com/x.NewRoot", "*ex.com/x.Root", "ex.com/x.I")},
+				Bindings:   []BindingSpec{{InterfaceType: "ex.com/x.I", ConcreteType: "ex.com/x.Impl", Problem: "x.Impl does not implement x.I"}},
+			},
+			wantKind:  ErrKindInvalidBind,
+			wantChain: []TypeKey{"*ex.com/x.Root", "ex.com/x.I", "ex.com/x.Impl"},
+			wantMsg: "failed to resolve provider for injector 'Init':\n" +
+				"  *x.Root -> x.I -> x.Impl (invalid Bind: x.Impl does not implement x.I)",
+		},
+		{
+			name: "ambiguous short names are shown in full",
+			inj: InjectorSpec{FuncName: "Init", ReturnType: "*ex.com/one/config.C", Providers: []ProviderNode{
+				prov("ex.com/one/config.New", "*ex.com/one/config.C", "*ex.com/two/config.C"),
+			}},
+			wantKind:  ErrKindMissingProvider,
+			wantChain: []TypeKey{"*ex.com/one/config.C", "*ex.com/two/config.C"},
+			wantMsg: "failed to resolve provider for injector 'Init':\n" +
+				"  *ex.com/one/config.C -> *ex.com/two/config.C (provider not found)",
+		},
+		{
 			name: "provider error requires injector error",
 			inj: InjectorSpec{FuncName: "Init", ReturnType: "*ex.com/x.A", Providers: []ProviderNode{
 				func() ProviderNode { p := prov("ex.com/x.NewA", "*ex.com/x.A"); p.HasError = true; return p }(),

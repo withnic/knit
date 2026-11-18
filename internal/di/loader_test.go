@@ -237,6 +237,60 @@ func TestLoader_ResolveErrors(t *testing.T) {
 	}
 }
 
+// TestLoader_BindAndDuplicateChains verifies the chains and explanations of
+// conflicts found in real source.
+func TestLoader_BindAndDuplicateChains(t *testing.T) {
+	tests := []struct {
+		pkg, injector string
+		wantKind      ResolveErrorKind
+		wantIn        []string
+	}{
+		{
+			pkg: "errs/duplicate", injector: "InitializeService", wantKind: ErrKindDuplicateProvider,
+			wantIn: []string{"*duplicate.Service -> *duplicate.Repo -> duplicate.Store (duplicate provider: Bind to "},
+		},
+		{
+			pkg: "errs/badbind", injector: "InitializeService", wantKind: ErrKindInvalidBind,
+			wantIn: []string{
+				"*badbind.Service -> badbind.Store -> badbind.SQLStore (invalid Bind: ", "wire.go:",
+				"badbind.SQLStore does not implement badbind.Store, but *badbind.SQLStore does; use new(*badbind.SQLStore)",
+			},
+		},
+		{
+			pkg: "errs/badbind", injector: "InitializeClosing", wantKind: ErrKindInvalidBind,
+			wantIn: []string{"badbind.Other does not implement badbind.Closer: method Close has a different signature"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.pkg+"/"+tt.injector, func(t *testing.T) {
+			injs, err := fixtureInjectors(t, tt.pkg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, inj := range injs {
+				if inj.FuncName != tt.injector {
+					continue
+				}
+				_, err := Resolve(inj)
+				var re *ResolveError
+				if !errors.As(err, &re) || re.Kind != tt.wantKind {
+					t.Fatalf("Resolve() error = %v, want kind %v", err, tt.wantKind)
+				}
+				if tt.wantKind == ErrKindInvalidBind && !errors.Is(err, ErrInvalidBind) {
+					t.Errorf("errors.Is(%v, ErrInvalidBind) = false", err)
+				}
+				for _, s := range tt.wantIn {
+					if !strings.Contains(err.Error(), s) {
+						t.Errorf("error lacks %q:\n%v", s, err)
+					}
+				}
+				return
+			}
+			t.Fatalf("injector %s not found", tt.injector)
+		})
+	}
+}
+
 // TestLoader_Rejects verifies that variadic parameters and out-of-scope wire
 // features produce clear errors instead of panics.
 func TestLoader_Rejects(t *testing.T) {

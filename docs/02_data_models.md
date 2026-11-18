@@ -27,6 +27,7 @@ knit はデータベースを持たず、Go の AST・型情報から抽出す�
 |---|---|---|
 | `InterfaceType` | TypeKey | インターフェースの完全修飾型名 |
 | `ConcreteType` | TypeKey | 実装する具象型の完全修飾型名（ポインタ型を含む） |
+| `Problem` | string | 具象型がインターフェースを実装しない場合の説明（Bind の位置を含む）。有効な Bind では空で、Resolver が依存チェーン付きのエラーにする |
 
 ### 1.3 InjectorSpec
 
@@ -42,7 +43,7 @@ knit はデータベースを持たず、Go の AST・型情報から抽出す�
 | `HasCleanup` | bool | Injector がクリーンアップ関数を返すか |
 | `HasError` | bool | Injector が `error` を返すか |
 | `Providers` | []ProviderNode | `NewSet` を平坦化した有効なプロバイダ一覧（ID 順） |
-| `Bindings` | []BindingSpec | 有効な Bind 一覧（InterfaceType 順） |
+| `Bindings` | []BindingSpec | Bind 一覧（InterfaceType 順） |
 | `Func` | *types.Func | Loader が設定する型チェック済みの Injector 宣言。コード生成時のシグネチャ・import・ゼロ値の描画に使う（手組みの Spec では nil） |
 
 ### 1.4 TypeKey 仕様と正規化ルール
@@ -66,7 +67,7 @@ knit はデータベースを持たず、Go の AST・型情報から抽出す�
 | `ResolvedInjector` | Injector の依存計画。`Steps`（トポロジカル順のプロバイダ呼び出し）と `Root`（返す値） |
 | `Step` | 1 回のプロバイダ呼び出し。`Args` は各引数に渡す値 |
 | `ValueRef` | 値の供給元。`Kind` が `FromParam`（Injector 引数）または `FromProvider`（先行ステップ）、`BoundFrom` は Bind 元の具象型 |
-| `ResolveError` | 解決エラー。`Injector`、`Kind`（provider not found / duplicate provider / circular dependency / cleanup・error の不足）、`Chain`（ルート型から失敗した型までの依存チェーン） |
+| `ResolveError` | 解決エラー。`Injector`、`Kind`（provider not found / duplicate provider / circular dependency / cleanup・error の不足 / invalid Bind）、`Chain`（ルート型から失敗した型までの依存チェーン） |
 
 ### 1.6 Mode (`internal/di/mode.go`)
 
