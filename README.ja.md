@@ -196,7 +196,7 @@ knit version                     バージョンを表示
 
 終了コード: `0` 成功、`1` 解析・生成エラー、`2` 使い方の誤り。
 
-内容が変わらないファイルは書き換えません。`di-graph.json` の形式は [docs/02_data_models.md](docs/02_data_models.md) を参照してください。
+内容が変わらないファイルは書き換えません。生成コードの印がない出力先のファイルは上書きせず、Injector がなくなったパッケージに残った生成ファイルはエラーで報告します。`di-graph.json` の形式は [docs/02_data_models.md](docs/02_data_models.md) を参照してください。
 
 ## コントリビュート
 
