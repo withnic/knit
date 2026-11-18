@@ -31,8 +31,9 @@ var (
 		InjectTag:     "knitinject",
 		OutFile:       "knit_gen.go",
 	}
-	// WireMode reads and writes exactly what google/wire does: wire.Build etc.
-	// from github.com/google/wire, //go:build wireinject, wire_gen.go.
+	// WireMode uses google/wire's inputs and output file: wire.Build etc. from
+	// github.com/google/wire, //go:build wireinject, wire_gen.go. Unlike wire,
+	// it does not copy other declarations from injector files to the output.
 	WireMode = Mode{
 		Name:          "wire",
 		MarkerPkgPath: "github.com/google/wire",
