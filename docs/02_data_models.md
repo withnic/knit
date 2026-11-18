@@ -1,6 +1,6 @@
 # 02. データモデル定義 (Data Models)
 
-knit はデータベースを持たず、Go の AST・型情報から抽出するメモリ上の構造と、出力成果物である依存グラフ JSON をデータモデルとします。
+knit はデータベースを持たず、Go の AST・型情報から抽出するメモリ上の構造をデータモデルとします。
 
 ## 1. DI コード生成エンジン用データモデル (`internal/di/model.go`)
 
@@ -66,7 +66,7 @@ knit はデータベースを持たず、Go の AST・型情報から抽出す�
 |---|---|
 | `ResolvedInjector` | Injector の依存計画。`Steps`（トポロジカル順のプロバイダ呼び出し）と `Root`（返す値） |
 | `Step` | 1 回のプロバイダ呼び出し。`Args` は各引数に渡す値 |
-| `ValueRef` | 値の供給元。`Kind` が `FromParam`（Injector 引数）または `FromProvider`（先行ステップ）、`BoundFrom` は Bind 元の具象型 |
+| `ValueRef` | 値の供給元。`Kind` が `FromParam`（Injector 引数）または `FromProvider`（先行ステップ） |
 | `ResolveError` | 解決エラー。`Injector`、`Kind`（provider not found / duplicate provider / circular dependency / cleanup・error の不足 / invalid Bind）、`Chain`（ルート型から失敗した型までの依存チェーン） |
 
 ### 1.6 Mode (`internal/di/mode.go`)
@@ -79,52 +79,3 @@ knit はデータベースを持たず、Go の AST・型情報から抽出す�
 | `MarkerPkgPath` | string | `Build` / `NewSet` / `Bind` を提供するパッケージ | `github.com/withnic/knit` | `github.com/google/wire` |
 | `InjectTag` | string | Injector ファイルのビルドタグ（生成ファイルはその否定） | `knitinject` | `wireinject` |
 | `OutFile` | string | デフォルトの生成ファイル名 | `knit_gen.go` | `wire_gen.go` |
-
-## 2. 依存グラフ JSON スキーマ (`.knit/di-graph.json`)
-
-`knit gen` が出力するファイルです（モードによらず同じ形式）。各 Injector がどの型・プロバイダに依存しているかを記録します。外部ツール向けの安定した出力であり、フォーマットを変更する場合は `version` を上げます。型定義は `internal/graphschema` にあります。
-
-```json
-{
-  "version": "1.0",
-  "generated_at": "2026-11-17T21:00:00+09:00",
-  "injectors": [
-    {
-      "name": "InitializeUserHandler",
-      "pkg_path": "github.com/org/repo/internal/di",
-      "root_type": "*github.com/org/repo/internal/handler.UserHandler",
-      "dependencies": [
-        {
-          "pkg_path": "github.com/org/repo/internal/handler",
-          "pkg_dir": "./internal/handler",
-          "type": "*github.com/org/repo/internal/handler.UserHandler",
-          "provider": "github.com/org/repo/internal/handler.NewUserHandler"
-        },
-        {
-          "pkg_path": "github.com/org/repo/internal/service",
-          "pkg_dir": "./internal/service",
-          "type": "github.com/org/repo/internal/service.UserService",
-          "provider": "github.com/org/repo/internal/service.NewUserService",
-          "bound_from": "*github.com/org/repo/internal/service.userServiceImpl"
-        }
-      ]
-    }
-  ]
-}
-```
-
-| フィールド | 説明 |
-|---|---|
-| `version` | スキーマバージョン（現在 `"1.0"`）。読み込み時に一致しないものは拒否する |
-| `generated_at` | 生成時刻（RFC 3339） |
-| `injectors` | Injector ごとのサブグラフ。`pkg_path`、`name` の順でソート |
-| `injectors[].name` / `pkg_path` | Injector 関数名と、それを宣言するパッケージの import パス |
-| `injectors[].root_type` | Injector が返す型（TypeKey） |
-| `dependencies` | 構築される型の一覧。`type`、`provider` の順でソート |
-| `dependencies[].type` | 供給される型（TypeKey） |
-| `dependencies[].provider` | その型を提供するプロバイダ関数の ID |
-| `dependencies[].pkg_path` | プロバイダのパッケージの import パス |
-| `dependencies[].pkg_dir` | プロバイダのパッケージのモジュールルートからの相対ディレクトリ（`./internal/handler`、ルートは `.`、モジュール外は空） |
-| `dependencies[].bound_from` | `Bind` によって満たされたインターフェースの場合、束縛元の具象型（省略可） |
-
-`dependencies` には、プロバイダ呼び出しごとのエントリに加え、`Bind` 経由で満たされたインターフェースごとに `bound_from` 付きのエントリが追加されます（Injector 引数から供給される型は含みません）。

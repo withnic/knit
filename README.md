@@ -13,7 +13,6 @@ You list your constructors once; knit works out the order to call them in and wr
 
 - **Native mode (default)**: declare injectors with `knit.Build` / `knit.NewSet` / `knit.Bind`. No dependency on google/wire.
 - **wire mode (`-mode=wire`)**: a replacement for the `wire` command. It reads your existing `wire.go` files and writes `wire_gen.go`.
-- **Dependency graph**: every run also writes `.knit/di-graph.json`, a machine-readable record of what each injector depends on (for tooling such as test impact analysis).
 
 ## Install
 
@@ -183,7 +182,7 @@ knit deliberately supports a small subset of wire. These features are rejected w
 ## Command reference
 
 ```
-knit gen [flags] [packages...]   generate code and .knit/di-graph.json (packages default to ./...)
+knit gen [flags] [packages...]   generate code (packages default to ./...)
 knit version                     print the version
 ```
 
@@ -191,12 +190,11 @@ knit version                     print the version
 |---|---|---|
 | `-mode` | `knit` | `knit` or `wire` |
 | `-out` | `knit_gen.go` / `wire_gen.go` | Name of the generated file in each package directory |
-| `-graph-out` | `.knit/di-graph.json` | Output path of the dependency graph; empty to skip |
 | `-dry-run` | `false` | Print the generated code instead of writing files |
 
 Exit codes: `0` success, `1` analysis or generation error, `2` usage error.
 
-Files whose content has not changed are not rewritten. knit refuses to overwrite an output file that is not marked as generated, and reports generated files left in packages that no longer declare injectors. The format of `di-graph.json` is described in [docs/02_data_models.md](docs/02_data_models.md) (Japanese).
+Files whose content has not changed are not rewritten. knit refuses to overwrite an output file that is not marked as generated, and reports generated files left in packages that no longer declare injectors.
 
 ## Contributing
 

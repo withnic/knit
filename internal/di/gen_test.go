@@ -10,9 +10,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
-
-	"github.com/withnic/knit/internal/graphschema"
 )
 
 // copyDir copies the directory tree src into dst.
@@ -70,7 +67,6 @@ func TestGen_EndToEnd(t *testing.T) {
 		Mode:     WireMode,
 		Dir:      dir,
 		Patterns: []string{"./basic", "./samename/...", "./gen/..."},
-		Now:      func() time.Time { return time.Unix(0, 0).UTC() },
 	}
 	res, err := Gen(context.Background(), opts)
 	if err != nil {
@@ -86,16 +82,8 @@ func TestGen_EndToEnd(t *testing.T) {
 		t.Fatalf("generated files = %v, want %v", rels, wantFiles)
 	}
 
-	graphPath := filepath.Join(dir, graphschema.DefaultPath)
-	if err := res.Write(graphPath); err != nil {
+	if err := res.Write(); err != nil {
 		t.Fatalf("Write() error = %v", err)
-	}
-	g, err := graphschema.ReadFile(graphPath)
-	if err != nil {
-		t.Fatalf("reading written graph: %v", err)
-	}
-	if len(g.Injectors) != 13 {
-		t.Errorf("graph has %d injectors, want 13", len(g.Injectors))
 	}
 
 	// Regenerating with the generated files in place is byte-identical.
@@ -255,20 +243,7 @@ func TestGen_KnitMode_Golden(t *testing.T) {
 	if strings.Contains(src, "withnic/knit\"") {
 		t.Errorf("generated code imports the marker package:\n%s", src)
 	}
-	var deps []string
-	for _, d := range res.Graph.Injectors[0].Dependencies {
-		deps = append(deps, strings.TrimSpace(d.Type+" "+d.BoundFrom))
-	}
-	wantDeps := []string{
-		"*example.com/knitfixture/app.SQLStore",
-		"*example.com/knitfixture/app.Server",
-		"example.com/knitfixture/app.DSN",
-		"example.com/knitfixture/app.Store *example.com/knitfixture/app.SQLStore",
-	}
-	if strings.Join(deps, ",") != strings.Join(wantDeps, ",") {
-		t.Errorf("graph dependencies = %v, want %v", deps, wantDeps)
-	}
-	if err := res.Write(""); err != nil {
+	if err := res.Write(); err != nil {
 		t.Fatal(err)
 	}
 	goCmd(t, dir, "vet", "./...")

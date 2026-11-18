@@ -5,8 +5,7 @@
 *.test
 *.out
 
-# Tool cache & AI workspace
-/.knit/
+# AI workspace
 /.ai-workspace/
 
 # Go vendor / coverage

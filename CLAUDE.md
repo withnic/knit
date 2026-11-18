@@ -6,7 +6,7 @@
 
 knit は、アーカイブされた google/wire と同じ宣言スタイルで使える Go 製の軽量な DI コードジェネレータです。
 
-- `knit gen`: Injector を解析してコードを生成し、依存グラフ `.knit/di-graph.json` も出力します。`Build` / `NewSet` / `Bind`、通常の `NewXxx` 関数とクリーンアップ関数に対応します。
+- `knit gen`: Injector を解析してコードを生成します。`Build` / `NewSet` / `Bind`、通常の `NewXxx` 関数とクリーンアップ関数に対応します。
   - デフォルト（knit モード）: マーカーパッケージ `github.com/withnic/knit`（リポジトリ直下の `knit.go`）、`//go:build knitinject`、出力 `knit_gen.go`。
   - `-mode=wire`: google/wire と同じ入出力（`github.com/google/wire`、`//go:build wireinject`、`wire_gen.go`）。
 - `knit version`: バージョンを表示します。
@@ -18,7 +18,7 @@ knit は、アーカイブされた google/wire と同じ宣言スタイルで�
 | ドキュメント | 内容 |
 |---|---|
 | `docs/01_system_overview.md` | コア機能、サポート対象・対象外のスコープ、CLI 仕様 |
-| `docs/02_data_models.md` | ProviderNode、InjectorSpec、TypeKey、di-graph.json の構造定義 |
+| `docs/02_data_models.md` | ProviderNode、InjectorSpec、TypeKey の構造定義 |
 | `docs/03_architecture.md` | パッケージ構成、コード生成パイプラインと生成コードの詳細 |
 | `docs/04_guidelines.md` | コーディング規約、決定論的出力、テスト戦略、禁止事項、テストマトリクス |
 

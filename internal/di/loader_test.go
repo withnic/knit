@@ -137,7 +137,7 @@ func TestLoader_WireInjectTag(t *testing.T) {
 		t.Errorf("steps = %v, want %v", got, want)
 	}
 	wantArgs := []ValueRef{
-		{Type: p + ".Store", Kind: FromProvider, Index: 1, BoundFrom: "*" + p + ".sqlStore"},
+		{Type: p + ".Store", Kind: FromProvider, Index: 1},
 		{Type: "string", Kind: FromParam, Index: 1},
 	}
 	if got := res.Steps[2].Args; !reflect.DeepEqual(got, wantArgs) {

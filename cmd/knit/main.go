@@ -1,7 +1,6 @@
 // Command knit is a lightweight dependency injection code generator. knit gen
 // writes knit_gen.go for every injector declared with the knit marker package
-// (or, with -mode=wire, wire_gen.go for google/wire injectors) and the
-// dependency graph .knit/di-graph.json.
+// (or, with -mode=wire, wire_gen.go for google/wire injectors).
 package main
 
 import (
@@ -17,7 +16,6 @@ import (
 	"strings"
 
 	"github.com/withnic/knit/internal/di"
-	"github.com/withnic/knit/internal/graphschema"
 )
 
 // version is set at build time with -ldflags "-X main.version=..." (make
@@ -55,7 +53,7 @@ func main() {
 const usage = `knit - dependency injection code generator (google/wire compatible with -mode=wire)
 
 Usage:
-  knit gen [flags] [packages...]   generate knit_gen.go (or wire_gen.go) and .knit/di-graph.json
+  knit gen [flags] [packages...]   generate knit_gen.go (or wire_gen.go)
   knit version                     print the version
 
 Run "knit <command> -h" for the flags of a command.
@@ -109,7 +107,6 @@ func runGen(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	modeName := fs.String("mode", di.KnitMode.Name,
 		"injector dialect: knit (knit.Build, //go:build knitinject, knit_gen.go) or wire (wire.Build, //go:build wireinject, wire_gen.go)")
 	out := fs.String("out", "", "name of the generated file in each package directory (default knit_gen.go, or wire_gen.go with -mode=wire)")
-	graphOut := fs.String("graph-out", graphschema.DefaultPath, "output path of the dependency graph JSON (empty to skip)")
 	dryRun := fs.Bool("dry-run", false, "print the generated code to stdout instead of writing files")
 	if code, ok := parseFlags(fs, args); !ok {
 		return code
@@ -141,15 +138,12 @@ func runGen(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return exitOK
 	}
 
-	if err := res.Write(*graphOut); err != nil {
+	if err := res.Write(); err != nil {
 		fmt.Fprintf(stderr, "knit gen: %v\n", err)
 		return exitError
 	}
 	for _, f := range res.Files {
 		fmt.Fprintf(stderr, "knit gen: wrote %s\n", displayPath(f.Path))
-	}
-	if *graphOut != "" {
-		fmt.Fprintf(stderr, "knit gen: wrote %s\n", *graphOut)
 	}
 	return exitOK
 }

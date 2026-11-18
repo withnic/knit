@@ -8,8 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/withnic/knit/internal/graphschema"
 )
 
 func runCLI(t *testing.T, args ...string) (code int, stdout, stderr string) {
@@ -31,7 +29,7 @@ func TestRun_Usage(t *testing.T) {
 		{name: "help", args: []string{"help"}, wantCode: exitOK, wantOut: "knit gen [flags]"},
 		{name: "version", args: []string{"version"}, wantCode: exitOK, wantOut: "knit "},
 		{name: "unknown command", args: []string{"build"}, wantCode: exitUsage, wantErrOut: `unknown command "build"`},
-		{name: "gen -h", args: []string{"gen", "-h"}, wantCode: exitOK, wantErrOut: "-graph-out"},
+		{name: "gen -h", args: []string{"gen", "-h"}, wantCode: exitOK, wantErrOut: "-dry-run"},
 		{name: "gen bad flag", args: []string{"gen", "-nope"}, wantCode: exitUsage, wantErrOut: "flag provided but not defined"},
 		{name: "gen bad mode", args: []string{"gen", "-mode=dagger"}, wantCode: exitUsage, wantErrOut: `unknown mode "dagger"`},
 	}
@@ -149,9 +147,8 @@ func InitializeSvc() (*svc.Svc, func(), error) {
 }
 
 // TestGen_EndToEnd runs knit gen the way a user would, in both modes:
-// -dry-run prints without writing, gen writes the generated file and the
-// graph, a second run is a no-op, and the generated injector compiles and
-// works.
+// -dry-run prints without writing, gen writes only the generated file, a
+// second run is a no-op, and the generated injector compiles and works.
 func TestGen_EndToEnd(t *testing.T) {
 	if testing.Short() {
 		t.Skip("runs go list / go test")
@@ -186,22 +183,18 @@ func TestGen_EndToEnd(t *testing.T) {
 			}
 
 			code, _, errOut = runCLI(t, gen()...)
-			if code != exitOK || !strings.Contains(errOut, "wrote "+outRel) || !strings.Contains(errOut, "wrote .knit/di-graph.json") {
+			if code != exitOK || !strings.Contains(errOut, "wrote "+outRel) {
 				t.Fatalf("gen = %d\nstderr: %s", code, errOut)
 			}
-			g, err := graphschema.ReadFile(filepath.Join(dir, graphschema.DefaultPath))
-			if err != nil {
-				t.Fatalf("reading graph: %v", err)
-			}
-			if len(g.Injectors) != 1 || g.Injectors[0].Name != "InitializeSvc" || len(g.Injectors[0].Dependencies) != 2 {
-				t.Errorf("graph = %+v, want InitializeSvc with 2 dependencies", g.Injectors)
+			if _, err := os.Stat(filepath.Join(dir, ".knit")); !os.IsNotExist(err) {
+				t.Errorf("gen created .knit (stat err = %v)", err)
 			}
 
 			first, err := os.ReadFile(filepath.Join(dir, outRel))
 			if err != nil {
 				t.Fatal(err)
 			}
-			if code, _, errOut = runCLI(t, gen("-graph-out", "")...); code != exitOK {
+			if code, _, errOut = runCLI(t, gen()...); code != exitOK {
 				t.Fatalf("second gen = %d\nstderr: %s", code, errOut)
 			}
 			second, err := os.ReadFile(filepath.Join(dir, outRel))

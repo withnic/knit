@@ -13,7 +13,6 @@
 
 - **knit モード（デフォルト）**: `knit.Build` / `knit.NewSet` / `knit.Bind` で宣言します。google/wire への依存は不要です。
 - **wire モード（`-mode=wire`）**: `wire` コマンドの代替です。既存の `wire.go` を読み、`wire_gen.go` を生成します。
-- **依存グラフ**: 実行のたびに `.knit/di-graph.json` も出力します。各 Injector が何に依存しているかを機械可読な形で記録したもので、テスト影響範囲解析などのツールで使えます。
 
 ## インストール
 
@@ -183,7 +182,7 @@ knit は wire の機能のうち、意図的に小さなサブセットだけを
 ## コマンドリファレンス
 
 ```
-knit gen [flags] [packages...]   コードと .knit/di-graph.json を生成（パッケージ省略時は ./...）
+knit gen [flags] [packages...]   コードを生成（パッケージ省略時は ./...）
 knit version                     バージョンを表示
 ```
 
@@ -191,12 +190,11 @@ knit version                     バージョンを表示
 |---|---|---|
 | `-mode` | `knit` | `knit` または `wire` |
 | `-out` | `knit_gen.go` / `wire_gen.go` | 各パッケージディレクトリに生成するファイル名 |
-| `-graph-out` | `.knit/di-graph.json` | 依存グラフの出力先。空文字で出力しない |
 | `-dry-run` | `false` | ファイルを書かずに生成コードを表示 |
 
 終了コード: `0` 成功、`1` 解析・生成エラー、`2` 使い方の誤り。
 
-内容が変わらないファイルは書き換えません。生成コードの印がない出力先のファイルは上書きせず、Injector がなくなったパッケージに残った生成ファイルはエラーで報告します。`di-graph.json` の形式は [docs/02_data_models.md](docs/02_data_models.md) を参照してください。
+内容が変わらないファイルは書き換えません。生成コードの印がない出力先のファイルは上書きせず、Injector がなくなったパッケージに残った生成ファイルはエラーで報告します。
 
 ## コントリビュート
 

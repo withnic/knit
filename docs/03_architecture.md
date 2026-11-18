@@ -11,16 +11,14 @@ knit/
 │       └── main.go              # CLI エントリーポイント (gen / version)
 ├── knit.go                      # マーカーパッケージ github.com/withnic/knit (Build / NewSet / Bind)
 ├── internal/
-│   ├── di/                      # DI コード生成エンジン
-│   │   ├── model.go             # TypeKey, ProviderNode, BindingSpec, InjectorSpec
-│   │   ├── mode.go              # Mode (KnitMode / WireMode)
-│   │   ├── loader.go            # golang.org/x/tools/go/packages による AST・型ロードとマーカー呼び出しの抽出
-│   │   ├── resolver.go          # 依存グラフ構築・トポロジカルソート・循環参照検出
-│   │   ├── generator.go         # 決定論的コード生成 (knit_gen.go / wire_gen.go)
-│   │   ├── graph_export.go      # 依存グラフ (di-graph.json) の構築
-│   │   ├── gen.go               # パイプライン全体 (Gen) とファイル書き込み
-│   │   └── testdata/            # フィクスチャモジュール (wire / knit)、wire スタブ、ゴールデンファイル
-│   └── graphschema/             # di-graph.json の型定義と読み書き
+│   └── di/                      # DI コード生成エンジン
+│       ├── model.go             # TypeKey, ProviderNode, BindingSpec, InjectorSpec
+│       ├── mode.go              # Mode (KnitMode / WireMode)
+│       ├── loader.go            # golang.org/x/tools/go/packages による AST・型ロードとマーカー呼び出しの抽出
+│       ├── resolver.go          # 依存グラフ構築・トポロジカルソート・循環参照検出
+│       ├── generator.go         # 決定論的コード生成 (knit_gen.go / wire_gen.go)
+│       ├── gen.go               # パイプライン全体 (Gen) とファイル書き込み
+│       └── testdata/            # フィクスチャモジュール (wire / knit)、wire スタブ、ゴールデンファイル
 ├── docs/
 ├── Makefile
 ├── .golangci.yml
@@ -32,20 +30,18 @@ knit/
 |---|---|
 | `github.com/withnic/knit`（ルート） | knit モードのマーカーパッケージ。`Build` / `NewSet` / `Bind` は静的解析用の目印で、実行時には何もしない。依存なし |
 | `cmd/knit` | CLI のフラグ解析とサブコマンドの実行制御。テスト可能な `run(ctx, args, stdout, stderr) int` を持つ |
-| `internal/di` | AST・型解析、依存関係の解決、コード生成、依存グラフの構築を担うコアモジュール |
-| `internal/graphschema` | `di-graph.json` のスキーマ定義（`Graph` / `Injector` / `Dependency`）と、決定論的な JSON 出力・バージョン検証付きの読み込み |
+| `internal/di` | AST・型解析、依存関係の解決、コード生成を担うコアモジュール |
 
 ## 2. DI コード生成パイプライン
 
-`di.Gen` が以下のステップを実行し、`GenResult{Files, Graph}` を返します（書き込みは `GenResult.Write`）。
+`di.Gen` が以下のステップを実行し、`GenResult{Files}` を返します（書き込みは `GenResult.Write`）。
 
 | ステップ | コンポーネント | 処理内容 |
 |---|---|---|
-| 1. パッケージロード | `loader.go` | `packages.Load` を `NeedName \| NeedFiles \| NeedSyntax \| NeedTypes \| NeedTypesInfo \| NeedImports \| NeedModule`、`-tags=<モードの InjectTag>` で実行する。パッケージのエラーはすべてまとめて報告する |
+| 1. パッケージロード | `loader.go` | `packages.Load` を `NeedName \| NeedFiles \| NeedSyntax \| NeedTypes \| NeedTypesInfo \| NeedImports`、`-tags=<モードの InjectTag>` で実行する。パッケージのエラーはすべてまとめて報告する |
 | 2. Injector 抽出とセット平坦化 | `loader.go` | モードのマーカーパッケージの `Build` を含むトップレベル関数を Injector として抽出する（関数の同一性は型情報で判定するため、import の別名やドットインポートでもよい）。`NewSet` を再帰的に展開し（別パッケージのセット変数は必要に応じて遅延ロード）、`Bind` を検証して取り込む。対象外の wire 関数・可変長引数・不正な戻り値はエラーにする |
 | 3. 依存解決とトポロジカルソート | `resolver.go` | Injector の戻り値型から DFS で必要なプロバイダをたどり、不足・循環を依存チェーン付きで検出する。重複供給（プロバイダ・Bind・引数の衝突）も検出する。Kahn 法でソートし、同順位はプロバイダ ID の昇順にする |
 | 4. コード生成と整形 | `generator.go` | パッケージごとに 1 ファイルを描画し、`go/format` で整形する |
-| 5. 依存グラフ構築 | `graph_export.go` | 解決結果から `di-graph.json` の内容を構築する |
 
 ## 3. 詳細設計
 
@@ -53,7 +49,7 @@ knit/
 
 `packages.Load` の `BuildFlags` にモードのタグ（knit モードは `-tags=knitinject`、wire モードは `-tags=wireinject`）を指定し、Injector 宣言ファイルを読み込みます。生成済みのファイルは `//go:build !knitinject`（または `!wireinject`）によって自動的に除外されるため、再生成時にシンボルが重複しません。
 
-モードが変えるのはマーカーパッケージ、ビルドタグ、デフォルトの出力ファイル名だけです。解決・生成ロジックと依存グラフは共通で、同じ Injector からはビルド制約の行を除いて同一のコードが生成されます。
+モードが変えるのはマーカーパッケージ、ビルドタグ、デフォルトの出力ファイル名だけです。解決・生成ロジックは共通で、同じ Injector からはビルド制約の行を除いて同一のコードが生成されます。
 
 ### 3.2 生成コードの構成
 
@@ -107,10 +103,3 @@ func InitializeServer(ctx context.Context) (*Server, func(), error) {
 - **import**: 標準ライブラリと外部パッケージをグループ分けしてパス順に並べる。エイリアスは import パスの末尾と異なる場合のみ明示する。
 - **LIFO クリーンアップ**: クリーンアップを返すプロバイダがある場合のみ、その個数の配列 `cleanups [N]func()` を出力する。各要素を `defer` で実行するため順序は逆順になり、途中で panic しても残りを実行する。`nil` は飛ばす。`len` や `append` は使わないので、同名のパッケージレベル宣言の影響を受けない。エラー時は、それまでに成功したリソースのクリーンアップを呼んでから返す。クリーンアップが不要な Injector が `func()` を返す場合は `func() {}` を返す。
 - **ゼロ値**: エラー時の戻り値は型に応じたゼロ値（`nil`、`0`、`""`、`false`、`T{}`）を使う。
-
-### 3.3 依存グラフの構築
-
-- 各プロバイダ呼び出しを `{type, provider, pkg_path, pkg_dir}` として記録する。
-- 引数や戻り値で `Bind` を経由した値は、インターフェース型のエントリとして `bound_from` 付きで追加する。
-- `pkg_dir` はメインモジュールのパスを基準に `./sub/dir` 形式で求める。
-- Injector は `pkg_path`、`name` の順、依存は `type`、`provider` の順でソートする。JSON は 2 スペースのインデントで、末尾に改行を付けて出力する。
