@@ -28,8 +28,12 @@ var ErrGenerate = errors.New("code generation failed")
 // The output is deterministic: injectors are emitted grouped by source file
 // and sorted by name, imports are sorted and aliased with numeric suffixes on
 // collision (config, config1, ...), and local variables are numbered v1, v2,
-// ... in dependency order with their cleanups named cleanupV1, cleanupV2, ... When a provider fails, the cleanup functions of
-// the providers that already succeeded run in LIFO order.
+// ... in dependency order with their cleanups named cleanupV1, cleanupV2, ...
+//
+// Cleanup functions run in LIFO order, both from the returned cleanup and when
+// a later provider fails. They are deferred so that a panicking cleanup does
+// not skip the remaining ones, nil cleanups are skipped, and no builtin other
+// than nil is used, so package-level names such as len cannot break the code.
 func GenerateFile(mode Mode, injs []*ResolvedInjector) ([]byte, error) {
 	mode = mode.orDefault()
 	if len(injs) == 0 {
@@ -123,8 +127,10 @@ type funcPlan struct {
 	cleanups   []string // cleanup variable per step ("" when the step has none)
 	errVar     string
 	cleanupFn  string // the aggregated cleanup closure
-	cleanupArr string // the []func() slice backing cleanupFn
+	cleanupArr string // the [numCleanups]func() array backing cleanupFn
 	useCleanup bool   // whether the cleanup machinery is emitted
+	// numCleanups counts the steps that return a cleanup function.
+	numCleanups int
 }
 
 // plan allocates local names for r and records the packages it references.
@@ -151,10 +157,10 @@ func (g *fileGen) plan(r *ResolvedInjector) *funcPlan {
 
 	for i := range r.Steps {
 		if r.Steps[i].Provider.HasCleanup {
-			p.useCleanup = true
+			p.numCleanups++
 		}
 	}
-	p.useCleanup = p.useCleanup && inj.HasCleanup
+	p.useCleanup = p.numCleanups > 0 && inj.HasCleanup
 	if inj.HasError {
 		p.errVar = n.take("err")
 	}
@@ -267,8 +273,8 @@ func (g *fileGen) writeFunc(b *bytes.Buffer, p *funcPlan) {
 	fmt.Fprintf(b, "func %s(%s) (%s) {\n", inj.FuncName, strings.Join(params, ", "), strings.Join(results, ", "))
 
 	if p.useCleanup {
-		fmt.Fprintf(b, "var %s []func()\n", p.cleanupArr)
-		fmt.Fprintf(b, "%s := func() {\nfor i := len(%s) - 1; i >= 0; i-- {\n%s[i]()\n}\n}\n", p.cleanupFn, p.cleanupArr, p.cleanupArr)
+		fmt.Fprintf(b, "var %s [%d]func()\n", p.cleanupArr, p.numCleanups)
+		fmt.Fprintf(b, "%s := func() {\nfor _, f := range %s {\nif f != nil {\ndefer f()\n}\n}\n}\n", p.cleanupFn, p.cleanupArr)
 	}
 
 	var errReturn string
@@ -280,7 +286,7 @@ func (g *fileGen) writeFunc(b *bytes.Buffer, p *funcPlan) {
 		errReturn = "return " + strings.Join(append(ret, p.errVar), ", ")
 	}
 
-	registered := false // whether a cleanup has been appended so far
+	registered := 0 // number of cleanups stored so far
 	for i := range p.r.Steps {
 		s := &p.r.Steps[i]
 		lhs := []string{p.vars[i]}
@@ -302,15 +308,15 @@ func (g *fileGen) writeFunc(b *bytes.Buffer, p *funcPlan) {
 
 		if s.Provider.HasError {
 			fmt.Fprintf(b, "if %s != nil {\n", p.errVar)
-			if registered {
+			if registered > 0 {
 				fmt.Fprintf(b, "%s()\n", p.cleanupFn)
 			}
 			b.WriteString(errReturn + "\n}\n")
 		}
 		if s.Provider.HasCleanup {
 			if p.useCleanup {
-				fmt.Fprintf(b, "%s = append(%s, %s)\n", p.cleanupArr, p.cleanupArr, p.cleanups[i])
-				registered = true
+				fmt.Fprintf(b, "%s[%d] = %s\n", p.cleanupArr, registered, p.cleanups[i])
+				registered++
 			} else {
 				// Unreachable: the resolver rejects providers with cleanups
 				// for injectors without one. Keep the variable used anyway.
