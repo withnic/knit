@@ -7,17 +7,19 @@ package basic
 // Injectors from wire.go:
 
 func InitializeServer(cfg *Config, name string) (*Server, func(), error) {
-	var cleanups []func()
+	var cleanups [1]func()
 	cleanup := func() {
-		for i := len(cleanups) - 1; i >= 0; i-- {
-			cleanups[i]()
+		for _, f := range cleanups {
+			if f != nil {
+				defer f()
+			}
 		}
 	}
 	v1, cleanupV1, err := NewDB(cfg)
 	if err != nil {
 		return nil, nil, err
 	}
-	cleanups = append(cleanups, cleanupV1)
+	cleanups[0] = cleanupV1
 	v2 := NewSQLStore(v1)
 	v3, err := NewServer(v2, name)
 	if err != nil {

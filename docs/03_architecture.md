@@ -76,23 +76,25 @@ import (
 // Injectors from knit.go:
 
 func InitializeServer(ctx context.Context) (*Server, func(), error) {
-	var cleanups []func()
+	var cleanups [2]func()
 	cleanup := func() {
-		for i := len(cleanups) - 1; i >= 0; i-- {
-			cleanups[i]()
+		for _, f := range cleanups {
+			if f != nil {
+				defer f()
+			}
 		}
 	}
 	v1, cleanupV1, err := db.NewDatabase(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
-	cleanups = append(cleanups, cleanupV1)
+	cleanups[0] = cleanupV1
 	v2, cleanupV2, err := logger.NewLogger()
 	if err != nil {
 		cleanup()
 		return nil, nil, err
 	}
-	cleanups = append(cleanups, cleanupV2)
+	cleanups[1] = cleanupV2
 	v3 := NewServer(v1, v2)
 	return v3, cleanup, nil
 }
@@ -103,7 +105,7 @@ func InitializeServer(ctx context.Context) (*Server, func(), error) {
 - **変数名**: プロバイダの戻り値は依存順に `v1, v2, ...`、そのクリーンアップは `cleanupV1, ...` と採番する。Injector の引数名は保持する（`_`・無名は `arg`）。
 - **名前衝突の回避**: ローカル変数・import 名は、出力先パッケージのトップレベル宣言、予約語・事前宣言識別子、互いの名前と衝突しないよう連番サフィックスを付ける（例: 同名パッケージ `config` が 2 つあり、引数名にも `config` がある場合は `config1`、`config2`）。
 - **import**: 標準ライブラリと外部パッケージをグループ分けしてパス順に並べる。エイリアスは import パスの末尾と異なる場合のみ明示する。
-- **エラー時の LIFO クリーンアップ**: クリーンアップを返すプロバイダがある場合のみ `cleanups []func()` を出力する。エラー時は、それまでに成功したリソースのクリーンアップを逆順に呼んでから返す。クリーンアップが不要な Injector が `func()` を返す場合は `func() {}` を返す。
+- **LIFO クリーンアップ**: クリーンアップを返すプロバイダがある場合のみ、その個数の配列 `cleanups [N]func()` を出力する。各要素を `defer` で実行するため順序は逆順になり、途中で panic しても残りを実行する。`nil` は飛ばす。`len` や `append` は使わないので、同名のパッケージレベル宣言の影響を受けない。エラー時は、それまでに成功したリソースのクリーンアップを呼んでから返す。クリーンアップが不要な Injector が `func()` を返す場合は `func() {}` を返す。
 - **ゼロ値**: エラー時の戻り値は型に応じたゼロ値（`nil`、`0`、`""`、`false`、`T{}`）を使う。
 
 ### 3.3 依存グラフの構築

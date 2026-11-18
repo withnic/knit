@@ -95,10 +95,12 @@ import (
 // Injectors from knit.go:
 
 func InitializeServer(ctx context.Context) (*Server, func(), error) {
-	var cleanups []func()
+	var cleanups [1]func()
 	cleanup := func() {
-		for i := len(cleanups) - 1; i >= 0; i-- {
-			cleanups[i]()
+		for _, f := range cleanups {
+			if f != nil {
+				defer f()
+			}
 		}
 	}
 	v1 := NewDSN(ctx)
@@ -106,7 +108,7 @@ func InitializeServer(ctx context.Context) (*Server, func(), error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	cleanups = append(cleanups, cleanupV2)
+	cleanups[0] = cleanupV2
 	v3 := NewServer(v2)
 	return v3, cleanup, nil
 }
@@ -133,7 +135,7 @@ Tip: add `//go:generate go tool knit gen` to a file in your module and regenerat
 | `knit.NewSet(...)` | Groups providers, other sets and bindings into a reusable package-level variable. Sets may be nested and may live in other packages. |
 | `knit.Bind(new(Iface), new(*Impl))` | Satisfies requests for an interface with a concrete type that some provider builds. |
 
-If a provider fails, the cleanup functions of everything built so far run in reverse order (LIFO) before the error is returned.
+If a provider fails, the cleanup functions of everything built so far run in reverse order (LIFO) before the error is returned. A nil cleanup is skipped, and a cleanup that panics does not prevent the remaining ones from running.
 
 Generated code is deterministic: the same input always produces byte-identical output. Errors explain the full dependency chain:
 
