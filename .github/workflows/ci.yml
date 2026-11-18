@@ -31,6 +31,8 @@ jobs:
           path: bin
           key: tools-${{ runner.os }}-${{ hashFiles('Makefile', 'go.mod') }}
       - run: make check
+      - name: Generated code matches the generator
+        run: make gen-check
       - run: make build
       - run: ./bin/knit version
 
@@ -48,7 +50,7 @@ jobs:
           go-version: stable
       - name: All tests including end-to-end
         run: make test-all
-      - name: Unit tests with the race detector
+      - name: All tests with the race detector
         if: runner.os == 'Linux'
         run: make test-race
       - name: Coverage

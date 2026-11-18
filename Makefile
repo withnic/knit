@@ -18,6 +18,7 @@ LDFLAGS  := -s -w -X main.version=$(VERSION)
 GO       ?= go
 GOFLAGS  ?=
 COVER_OUT := coverage.out
+GOLDEN_DIR := internal/di/testdata/golden
 
 # ---- Pinned tool versions ------------------------------------------------------
 GOLANGCI_LINT_VERSION := v2.15.0
@@ -61,8 +62,15 @@ test-all: ## Run all tests including end-to-end (Medium) tests
 	$(GO) test $(GOFLAGS) $(PKGS)
 
 .PHONY: test-race
-test-race: ## Run unit tests with the race detector (requires a C compiler)
-	CGO_ENABLED=1 $(GO) test $(GOFLAGS) -short -race $(PKGS)
+test-race: ## Run all tests with the race detector (requires a C compiler)
+	CGO_ENABLED=1 $(GO) test $(GOFLAGS) -race $(PKGS)
+
+.PHONY: gen-check
+gen-check: ## Fail if regenerating the golden files changes them
+	$(GO) test $(GOFLAGS) ./internal/di -run Golden -update -count=1
+	git diff --exit-code -- $(GOLDEN_DIR)
+	@untracked="$$(git ls-files --others --exclude-standard -- $(GOLDEN_DIR))"; \
+	if [ -n "$$untracked" ]; then echo "untracked golden files:"; echo "$$untracked"; exit 1; fi
 
 .PHONY: cover
 cover: ## Run all tests with coverage and print a summary
