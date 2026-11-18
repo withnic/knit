@@ -52,6 +52,8 @@ func TestGenerateFile_Golden(t *testing.T) {
 		{pkg: "samename/di", golden: "samename.golden"},
 		// Three cleanup+error providers: LIFO cleanup on failure.
 		{pkg: "gen/lifo", golden: "lifo.golden"},
+		// Aliases under a pointer, in a slice and as a type argument.
+		{pkg: "gen/alias", golden: "alias.golden"},
 		// Two packages named "config", a package named "v1", a parameter
 		// named "config", a package-level "cleanup", value-type zero value,
 		// stdlib import grouping and two source files.

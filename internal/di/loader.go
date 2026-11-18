@@ -5,9 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"go/ast"
+	"go/build"
 	"go/token"
 	"go/types"
 	"os"
+	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -37,6 +40,14 @@ var (
 	ErrInvalidSignature = errors.New("invalid signature")
 	// ErrInvalidBind is returned for malformed Bind calls.
 	ErrInvalidBind = errors.New("invalid Bind")
+	// ErrMissingBuildTag is returned when an injector is declared in a file
+	// that is also compiled without the inject tag, which would make it clash
+	// with its generated implementation.
+	ErrMissingBuildTag = errors.New("injector file lacks the inject build tag")
+	// ErrInaccessibleProvider is returned when generated code could not call
+	// a provider: it is unexported in another package, or only exists under
+	// the inject tag.
+	ErrInaccessibleProvider = errors.New("provider cannot be called from generated code")
 )
 
 // unsupportedWireFuncs lists wire functions that are intentionally out of scope
@@ -56,6 +67,8 @@ type Loader struct {
 	mode Mode
 	// pkgs caches packages loaded with full syntax, keyed by import path.
 	pkgs map[string]*packages.Package
+	// plainBuild caches compiledWithoutTag by file path.
+	plainBuild map[string]bool
 }
 
 // NewLoader returns a Loader for mode (the zero Mode means KnitMode) that
@@ -76,8 +89,24 @@ func NewLoader(mode Mode, dir string, env []string) *Loader {
 			BuildFlags: []string{"-tags=" + mode.InjectTag},
 			Tests:      false,
 		},
-		pkgs: make(map[string]*packages.Package),
+		pkgs:       make(map[string]*packages.Package),
+		plainBuild: make(map[string]bool),
 	}
+}
+
+// compiledWithoutTag reports whether the file at path is part of a build that
+// does not set the mode's inject tag. Files that cannot be read (for example
+// sources known only from export data) count as compiled.
+func (l *Loader) compiledWithoutTag(path string) bool {
+	if v, ok := l.plainBuild[path]; ok {
+		return v
+	}
+	ctx := build.Default
+	ctx.BuildTags = slices.DeleteFunc(slices.Clone(ctx.BuildTags), func(t string) bool { return t == l.mode.InjectTag })
+	match, err := ctx.MatchFile(filepath.Dir(path), filepath.Base(path))
+	v := err != nil || match
+	l.plainBuild[path] = v
+	return v
 }
 
 // Load loads the packages matching patterns and returns them sorted by import
@@ -190,6 +219,10 @@ func (l *Loader) injector(ctx context.Context, pkg *packages.Package, filePath s
 	if len(builds) > 1 {
 		return nil, fmt.Errorf("%s: injector %s: %w: multiple %s.Build calls", pos(builds[1].Pos()), name, ErrUnsupported, l.mode.Name)
 	}
+	if l.compiledWithoutTag(filePath) {
+		return nil, fmt.Errorf("%s: injector %s: %w: add //go:build %s to the file, or the generated code will redeclare the injector",
+			pos(fn.Pos()), name, ErrMissingBuildTag, l.mode.InjectTag)
+	}
 	obj, ok := pkg.TypesInfo.Defs[fn.Name].(*types.Func)
 	if !ok {
 		return nil, fmt.Errorf("%s: injector %s: missing type information", pos(fn.Pos()), name)
@@ -215,7 +248,7 @@ func (l *Loader) injector(ctx context.Context, pkg *packages.Package, filePath s
 		return nil, fmt.Errorf("%s: injector %s: %w", pos(fn.Pos()), name, err)
 	}
 
-	sb := newSetBuilder(ctx, l)
+	sb := newSetBuilder(ctx, l, pkg.PkgPath)
 	for _, arg := range builds[0].Args {
 		sb.addExpr(pkg, arg)
 	}
@@ -279,16 +312,18 @@ func (l *Loader) markerFuncName(info *types.Info, expr ast.Expr) (string, bool) 
 type setBuilder struct {
 	ctx       context.Context
 	l         *Loader
+	target    string                  // import path of the package code is generated into
 	providers map[string]ProviderNode // keyed by ID; identical providers are deduplicated
 	bindings  map[BindingSpec]struct{}
 	visiting  map[string]bool // provider-set variables currently being expanded
 	errs      []error
 }
 
-func newSetBuilder(ctx context.Context, l *Loader) *setBuilder {
+func newSetBuilder(ctx context.Context, l *Loader, target string) *setBuilder {
 	return &setBuilder{
 		ctx:       ctx,
 		l:         l,
+		target:    target,
 		providers: make(map[string]ProviderNode),
 		bindings:  make(map[BindingSpec]struct{}),
 		visiting:  make(map[string]bool),
@@ -345,12 +380,30 @@ func (b *setBuilder) addExpr(pkg *packages.Package, expr ast.Expr) {
 			b.errorf(pkg, expr.Pos(), "%w", err)
 			return
 		}
+		if err := b.checkCallable(obj); err != nil {
+			b.errorf(pkg, expr.Pos(), "%w", err)
+			return
+		}
 		b.providers[p.ID] = p
 	case *types.Var:
 		b.addSetVar(pkg, expr, obj)
 	default:
 		b.errorf(pkg, expr.Pos(), "%w: %s is neither a provider function nor a provider set", ErrUnsupported, types.ExprString(expr))
 	}
+}
+
+// checkCallable reports why the generated file could not call fn, if so.
+func (b *setBuilder) checkCallable(fn *types.Func) error {
+	if !fn.Exported() && fn.Pkg().Path() != b.target {
+		return fmt.Errorf("provider %s: %w: it is unexported and the injector is in package %s; export it",
+			fn.FullName(), ErrInaccessibleProvider, b.target)
+	}
+	file := b.l.cfg.Fset.Position(fn.Pos()).Filename
+	if file != "" && !b.l.compiledWithoutTag(file) {
+		return fmt.Errorf("provider %s: %w: %s is only compiled with the %s tag; move the provider to a file without it",
+			fn.FullName(), ErrInaccessibleProvider, filepath.Base(file), b.l.mode.InjectTag)
+	}
+	return nil
 }
 
 // addSetVar expands a package-level provider set variable, e.g.
