@@ -1,0 +1,1 @@
+injector InitializeT: $FIXTURE/invalid/tagged/wire.go:10:19: provider example.com/fixture/invalid/tagged.NewT: provider cannot be called from generated code: wire.go is only compiled with the wireinject tag; move the provider to a file without it

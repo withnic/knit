@@ -45,7 +45,7 @@ Design documents are in [docs/](docs/) (Japanese). Please read them before chang
 3. If you intentionally change the generated code, update the golden files and review the diff:
 
    ```sh
-   go test ./internal/di -run TestGenerateFile_Golden -update
+   go test ./internal/di -run Golden -update
    git diff internal/di/testdata/golden
    ```
 
@@ -122,7 +122,7 @@ make fmt        # コードの整形
 3. 生成コードを意図的に変えた場合は、ゴールデンファイルを更新して差分を確認します。
 
    ```sh
-   go test ./internal/di -run TestGenerateFile_Golden -update
+   go test ./internal/di -run Golden -update
    git diff internal/di/testdata/golden
    ```
 

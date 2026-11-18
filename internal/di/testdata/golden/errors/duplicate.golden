@@ -1,0 +1,2 @@
+failed to resolve provider for injector 'InitializeService':
+  *duplicate.Service -> *duplicate.Repo -> duplicate.Store (duplicate provider: Bind to *example.com/fixture/errs/duplicate.SQLStore, example.com/fixture/errs/duplicate.NewStore)

@@ -1,0 +1,2 @@
+failed to resolve provider for injector 'InitializeUserService':
+  service.UserService -> repo.UserRepository -> *db.Pool (provider not found)

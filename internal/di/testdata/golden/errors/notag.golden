@@ -1,0 +1,1 @@
+$FIXTURE/invalid/notag/wire.go:5:1: injector InitializeT: injector file lacks the inject build tag: add //go:build wireinject to the file, or the generated code will redeclare the injector
