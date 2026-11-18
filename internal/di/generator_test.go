@@ -56,6 +56,10 @@ func TestGenerateFile_Golden(t *testing.T) {
 		{pkg: "gen/alias", golden: "alias.golden"},
 		// Package-level len and append next to generated cleanup code.
 		{pkg: "gen/shadow", golden: "shadow.golden"},
+		// Every provider and injector result shape.
+		{pkg: "gen/shapes", golden: "shapes.golden"},
+		// Nested NewSet, sets from another package and Bind inside a set.
+		{pkg: "gen/sets/app", golden: "sets.golden"},
 		// Two packages named "config", a package named "v1", a parameter
 		// named "config", a package-level "cleanup", value-type zero value,
 		// stdlib import grouping and two source files.
@@ -91,19 +95,69 @@ func TestGenerateFile_Golden(t *testing.T) {
 
 			typeCheckGenerated(t, pkg, got)
 
-			path := filepath.Join("testdata", "golden", tt.golden)
-			if *update {
-				if err := os.WriteFile(path, got, 0o600); err != nil {
-					t.Fatal(err)
+			compareGolden(t, tt.golden, got)
+		})
+	}
+}
+
+// compareGolden compares got with testdata/golden/name, rewriting the file
+// first when -update is set.
+func compareGolden(t *testing.T, name string, got []byte) {
+	t.Helper()
+	path := filepath.Join("testdata", "golden", filepath.FromSlash(name))
+	if *update {
+		if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, got, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading golden file (run with -update to create it): %v", err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Errorf("output differs from %s (run with -update to accept):\n%s", path, got)
+	}
+}
+
+// TestErrors_Golden pins the complete messages of analysis and resolution
+// errors. Absolute fixture paths are replaced by $FIXTURE.
+func TestErrors_Golden(t *testing.T) {
+	tests := []struct {
+		pkg    string
+		golden string
+	}{
+		{pkg: "cycle", golden: "errors/cycle.golden"},
+		{pkg: "missing/di", golden: "errors/missing.golden"},
+		{pkg: "errs/duplicate", golden: "errors/duplicate.golden"},
+		{pkg: "errs/badbind", golden: "errors/badbind.golden"},
+		{pkg: "invalid/notag", golden: "errors/notag.golden"},
+		{pkg: "invalid/tagged", golden: "errors/tagged.golden"},
+		{pkg: "invalid/unexported/di", golden: "errors/unexported.golden"},
+	}
+	dir, err := filepath.Abs(filepath.Join("testdata", "fixture"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range tests {
+		t.Run(tt.pkg, func(t *testing.T) {
+			var msgs []string
+			injs, err := fixtureInjectors(t, tt.pkg)
+			if err != nil {
+				msgs = append(msgs, err.Error())
+			}
+			for _, inj := range injs {
+				if _, err := Resolve(inj); err != nil {
+					msgs = append(msgs, err.Error())
 				}
 			}
-			want, err := os.ReadFile(path)
-			if err != nil {
-				t.Fatalf("reading golden file (run with -update to create it): %v", err)
+			if len(msgs) == 0 {
+				t.Fatal("no error reported")
 			}
-			if !bytes.Equal(got, want) {
-				t.Errorf("generated code differs from %s (run with -update to accept):\n%s", path, got)
-			}
+			got := strings.ReplaceAll(strings.Join(msgs, "\n\n"), dir, "$FIXTURE") + "\n"
+			compareGolden(t, tt.golden, []byte(got))
 		})
 	}
 }

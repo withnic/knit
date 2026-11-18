@@ -1,0 +1,5 @@
+failed to resolve provider for injector 'InitializeClosing':
+  *badbind.Service -> badbind.Closer -> badbind.Other (invalid Bind: $FIXTURE/errs/badbind/wire.go:12:41: badbind.Other does not implement badbind.Closer: method Close has a different signature)
+
+failed to resolve provider for injector 'InitializeService':
+  *badbind.Service -> badbind.Store -> badbind.SQLStore (invalid Bind: $FIXTURE/errs/badbind/wire.go:8:44: badbind.SQLStore does not implement badbind.Store, but *badbind.SQLStore does; use new(*badbind.SQLStore))
