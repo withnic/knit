@@ -81,7 +81,7 @@ func TestGen_EndToEnd(t *testing.T) {
 		rel, _ := filepath.Rel(dir, f.Path)
 		rels = append(rels, filepath.ToSlash(rel))
 	}
-	wantFiles := []string{"basic/wire_gen.go", "gen/alias/wire_gen.go", "gen/collide/app/wire_gen.go", "gen/lifo/wire_gen.go", "samename/di/wire_gen.go"}
+	wantFiles := []string{"basic/wire_gen.go", "gen/alias/wire_gen.go", "gen/collide/app/wire_gen.go", "gen/lifo/wire_gen.go", "gen/shadow/wire_gen.go", "samename/di/wire_gen.go"}
 	if strings.Join(rels, ",") != strings.Join(wantFiles, ",") {
 		t.Fatalf("generated files = %v, want %v", rels, wantFiles)
 	}
@@ -94,8 +94,8 @@ func TestGen_EndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reading written graph: %v", err)
 	}
-	if len(g.Injectors) != 6 {
-		t.Errorf("graph has %d injectors, want 6", len(g.Injectors))
+	if len(g.Injectors) != 7 {
+		t.Errorf("graph has %d injectors, want 7", len(g.Injectors))
 	}
 
 	// Regenerating with the generated files in place is byte-identical.

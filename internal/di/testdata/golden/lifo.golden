@@ -7,29 +7,31 @@ package lifo
 // Injectors from wire.go:
 
 func InitializeRoot() (*Root, func(), error) {
-	var cleanups []func()
+	var cleanups [3]func()
 	cleanup := func() {
-		for i := len(cleanups) - 1; i >= 0; i-- {
-			cleanups[i]()
+		for _, f := range cleanups {
+			if f != nil {
+				defer f()
+			}
 		}
 	}
 	v1, cleanupV1, err := NewA()
 	if err != nil {
 		return nil, nil, err
 	}
-	cleanups = append(cleanups, cleanupV1)
+	cleanups[0] = cleanupV1
 	v2, cleanupV2, err := NewB(v1)
 	if err != nil {
 		cleanup()
 		return nil, nil, err
 	}
-	cleanups = append(cleanups, cleanupV2)
+	cleanups[1] = cleanupV2
 	v3, cleanupV3, err := NewC(v2)
 	if err != nil {
 		cleanup()
 		return nil, nil, err
 	}
-	cleanups = append(cleanups, cleanupV3)
+	cleanups[2] = cleanupV3
 	v4 := NewRoot(v3)
 	return v4, cleanup, nil
 }

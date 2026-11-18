@@ -95,10 +95,12 @@ import (
 // Injectors from knit.go:
 
 func InitializeServer(ctx context.Context) (*Server, func(), error) {
-	var cleanups []func()
+	var cleanups [1]func()
 	cleanup := func() {
-		for i := len(cleanups) - 1; i >= 0; i-- {
-			cleanups[i]()
+		for _, f := range cleanups {
+			if f != nil {
+				defer f()
+			}
 		}
 	}
 	v1 := NewDSN(ctx)
@@ -106,7 +108,7 @@ func InitializeServer(ctx context.Context) (*Server, func(), error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	cleanups = append(cleanups, cleanupV2)
+	cleanups[0] = cleanupV2
 	v3 := NewServer(v2)
 	return v3, cleanup, nil
 }
@@ -133,7 +135,7 @@ defer cleanup()
 | `knit.NewSet(...)` | プロバイダ・他のセット・Bind をまとめた、再利用できるパッケージ変数を作ります。ネストでき、別パッケージに置くこともできます。 |
 | `knit.Bind(new(Iface), new(*Impl))` | インターフェースの要求を、いずれかのプロバイダが作る具象型で満たします。 |
 
-プロバイダが失敗した場合は、それまでに作ったもののクリーンアップ関数を逆順（LIFO）に実行してからエラーを返します。
+プロバイダが失敗した場合は、それまでに作ったもののクリーンアップ関数を逆順（LIFO）に実行してからエラーを返します。nil のクリーンアップは飛ばし、クリーンアップが panic しても残りは実行します。
 
 生成コードは決定論的で、同じ入力からは常にバイト単位で同じ出力になります。エラーには依存のつながりがすべて表示されます。
 

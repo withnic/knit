@@ -6,8 +6,9 @@ import "errors"
 // Log records resource lifecycle events in order.
 var Log []string
 
-// FailAt names the provider that returns an error ("" for none).
-var FailAt string
+// FailAt names the provider that returns an error ("" for none), NilCleanupAt
+// the one that returns a nil cleanup and PanicAt the one whose cleanup panics.
+var FailAt, NilCleanupAt, PanicAt string
 
 type (
 	A    struct{}
@@ -21,7 +22,15 @@ func open(name string) (func(), error) {
 		return nil, errors.New("open " + name + " failed")
 	}
 	Log = append(Log, "open "+name)
-	return func() { Log = append(Log, "close "+name) }, nil
+	if NilCleanupAt == name {
+		return nil, nil
+	}
+	return func() {
+		Log = append(Log, "close "+name)
+		if PanicAt == name {
+			panic("close " + name + " failed")
+		}
+	}, nil
 }
 
 func NewA() (*A, func(), error) {
