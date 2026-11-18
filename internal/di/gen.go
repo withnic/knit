@@ -12,9 +12,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
-
-	"github.com/withnic/knit/internal/graphschema"
 )
 
 // Errors about existing files in the way of, or left behind by, generation.
@@ -42,8 +39,6 @@ type GenOptions struct {
 	OutFile string
 	// Env replaces the environment of the underlying go command when non-nil.
 	Env []string
-	// Now returns the graph timestamp. Nil means time.Now.
-	Now func() time.Time
 }
 
 // GeneratedFile is one generated source file.
@@ -58,13 +53,11 @@ type GeneratedFile struct {
 type GenResult struct {
 	// Files lists one generated file per package, sorted by Path.
 	Files []GeneratedFile
-	// Graph is the di-graph.json document for every injector.
-	Graph *graphschema.Graph
 }
 
 // Gen loads the packages matching opts.Patterns, resolves every injector and
-// renders one file per package together with the dependency graph. Nothing is
-// written to disk; see GenResult.Write.
+// renders one file per package. Nothing is written to disk; see
+// GenResult.Write.
 //
 // Errors from all injectors are reported together, sorted, so a single run
 // surfaces every problem.
@@ -81,10 +74,6 @@ func Gen(ctx context.Context, opts GenOptions) (*GenResult, error) {
 	if filepath.Base(outFile) != outFile || filepath.Ext(outFile) != ".go" {
 		return nil, fmt.Errorf("output file %q must be a plain .go file name", outFile)
 	}
-	now := opts.Now
-	if now == nil {
-		now = time.Now
-	}
 
 	l := NewLoader(mode, opts.Dir, opts.Env)
 	pkgs, err := l.Load(ctx, patterns...)
@@ -93,14 +82,10 @@ func Gen(ctx context.Context, opts GenOptions) (*GenResult, error) {
 	}
 
 	var (
-		resolved   []*ResolvedInjector
-		errs       []error
-		modulePath string
+		resolved []*ResolvedInjector
+		errs     []error
 	)
 	for _, p := range pkgs {
-		if modulePath == "" && p.Module != nil {
-			modulePath = p.Module.Path
-		}
 		injs, err := l.Injectors(ctx, p)
 		if err != nil {
 			errs = append(errs, err)
@@ -136,7 +121,7 @@ func Gen(ctx context.Context, opts GenOptions) (*GenResult, error) {
 	}
 	sort.Strings(pkgPaths)
 
-	res := &GenResult{Graph: BuildGraph(resolved, modulePath, now())}
+	res := &GenResult{}
 	for _, p := range pkgPaths {
 		injs := byPkg[p]
 		src, err := GenerateFile(mode, injs)
@@ -153,9 +138,9 @@ func Gen(ctx context.Context, opts GenOptions) (*GenResult, error) {
 	return res, nil
 }
 
-// Write writes every generated file and, when graphPath is not empty, the
-// dependency graph. Files whose content is unchanged are left untouched.
-func (r *GenResult) Write(graphPath string) error {
+// Write writes every generated file. Files whose content is unchanged are left
+// untouched.
+func (r *GenResult) Write() error {
 	for _, f := range r.Files {
 		if old, err := os.ReadFile(f.Path); err == nil && bytes.Equal(old, f.Content) {
 			continue
@@ -164,10 +149,7 @@ func (r *GenResult) Write(graphPath string) error {
 			return fmt.Errorf("writing generated file: %w", err)
 		}
 	}
-	if graphPath == "" {
-		return nil
-	}
-	return graphschema.WriteFile(graphPath, r.Graph)
+	return nil
 }
 
 // isGenerated reports whether src is empty or carries the standard

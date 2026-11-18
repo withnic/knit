@@ -92,7 +92,7 @@ func TestResolve_TopologicalOrder(t *testing.T) {
 				"ex.com/svc.NewImpl": {{Type: db, Kind: FromParam, Index: 1}},
 				"ex.com/srv.NewServer": {
 					{Type: ctx, Kind: FromParam, Index: 0},
-					{Type: svc, Kind: FromProvider, Index: 0, BoundFrom: svcImp},
+					{Type: svc, Kind: FromProvider, Index: 0},
 				},
 			},
 			wantRoot: ValueRef{Type: srv, Kind: FromProvider, Index: 1},
@@ -106,7 +106,7 @@ func TestResolve_TopologicalOrder(t *testing.T) {
 				Bindings:   []BindingSpec{{InterfaceType: svc, ConcreteType: svcImp}},
 			},
 			wantSteps: []string{},
-			wantRoot:  ValueRef{Type: svc, Kind: FromParam, Index: 0, BoundFrom: svcImp},
+			wantRoot:  ValueRef{Type: svc, Kind: FromParam, Index: 0},
 		},
 	}
 	for _, tt := range tests {

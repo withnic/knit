@@ -121,9 +121,6 @@ type ValueRef struct {
 	// Index is the injector parameter index (FromParam) or the step index in
 	// ResolvedInjector.Steps (FromProvider).
 	Index int
-	// BoundFrom is the concrete type the value was bound from via wire.Bind,
-	// or empty when Type was provided directly.
-	BoundFrom TypeKey
 }
 
 // Step is one provider call in dependency order.
@@ -342,9 +339,9 @@ func (r *resolver) visit(t TypeKey) error {
 }
 
 // source returns the provider output type or parameter that ultimately
-// supplies t after following bindings, plus the bound concrete type.
-func (r *resolver) source(t TypeKey) (supplier, boundFrom TypeKey) {
-	supplier = t
+// supplies t after following bindings.
+func (r *resolver) source(t TypeKey) TypeKey {
+	supplier := t
 	for {
 		if _, ok := r.params[supplier]; ok {
 			break
@@ -355,10 +352,7 @@ func (r *resolver) source(t TypeKey) (supplier, boundFrom TypeKey) {
 		}
 		supplier = c
 	}
-	if supplier != t {
-		boundFrom = supplier
-	}
-	return supplier, boundFrom
+	return supplier
 }
 
 // plan orders the needed providers with Kahn's algorithm and wires up the
@@ -376,7 +370,7 @@ func (r *resolver) plan() (*ResolvedInjector, error) {
 	for _, t := range nodes {
 		deps := make(map[TypeKey]bool)
 		for _, param := range r.providers[t].Params {
-			sup, _ := r.source(param.Type)
+			sup := r.source(param.Type)
 			if r.needed[sup] && !deps[sup] {
 				deps[sup] = true
 				indeg[t]++
@@ -432,9 +426,9 @@ func (r *resolver) plan() (*ResolvedInjector, error) {
 }
 
 func (r *resolver) ref(t TypeKey, stepIndex map[TypeKey]int) ValueRef {
-	sup, bound := r.source(t)
+	sup := r.source(t)
 	if i, ok := r.params[sup]; ok {
-		return ValueRef{Type: t, Kind: FromParam, Index: i, BoundFrom: bound}
+		return ValueRef{Type: t, Kind: FromParam, Index: i}
 	}
-	return ValueRef{Type: t, Kind: FromProvider, Index: stepIndex[sup], BoundFrom: bound}
+	return ValueRef{Type: t, Kind: FromProvider, Index: stepIndex[sup]}
 }

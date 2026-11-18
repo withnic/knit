@@ -23,8 +23,7 @@ const loadMode = packages.NeedName |
 	packages.NeedSyntax |
 	packages.NeedTypes |
 	packages.NeedTypesInfo |
-	packages.NeedImports |
-	packages.NeedModule
+	packages.NeedImports
 
 // Sentinel errors that callers (and tests) can match with errors.Is.
 var (

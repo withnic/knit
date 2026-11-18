@@ -2,8 +2,7 @@
 //
 // It loads injector declarations written with a marker package (knit's own
 // github.com/withnic/knit by default, or github.com/google/wire in wire mode;
-// see Mode), resolves their dependency graphs and renders the generated code
-// and the di-graph.json document.
+// see Mode), resolves their dependency graphs and renders the generated code.
 package di
 
 import (
