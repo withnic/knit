@@ -7,9 +7,9 @@ package alias
 // Injectors from wire.go:
 
 func InitializeRoot() *Root {
-	v1 := NewBox()
-	v2 := NewConfig()
-	v3 := NewConfigs()
-	v4 := NewRoot(v2, v3, v1)
+	v1 := NewConfig()
+	v2 := NewConfigs()
+	v3 := NewBox()
+	v4 := NewRoot(v1, v2, v3)
 	return v4
 }

@@ -19,13 +19,13 @@ func InitializeServer() (*Server, func(), error) {
 			}
 		}
 	}
-	v1 := NewLogger()
-	v2, cleanupV2, err := store.NewDB()
+	v1, cleanupV1, err := store.NewDB()
 	if err != nil {
 		return nil, nil, err
 	}
-	cleanups[0] = cleanupV2
-	v3 := store.NewSQLStore(v2)
-	v4 := NewServer(v3, v1)
+	cleanups[0] = cleanupV1
+	v2 := store.NewSQLStore(v1)
+	v3 := NewLogger()
+	v4 := NewServer(v2, v3)
 	return v4, cleanup, nil
 }

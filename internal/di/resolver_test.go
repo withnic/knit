@@ -58,21 +58,34 @@ func TestResolve_TopologicalOrder(t *testing.T) {
 			wantRoot: ValueRef{Type: repo, Kind: FromProvider, Index: 2},
 		},
 		{
-			name: "diamond with ID tie-break and shared dependency built once",
+			name: "diamond in parameter order with shared dependency built once",
 			inj: InjectorSpec{FuncName: "Init", ReturnType: srv, Providers: []ProviderNode{
 				prov("ex.com/srv.NewServer", srv, repo, cache),
 				prov("ex.com/repo.NewRepo", repo, cfg),
 				prov("ex.com/cache.NewCache", cache, cfg),
 				prov("ex.com/cfg.NewConfig", cfg),
 			}},
-			wantSteps: []string{"ex.com/cfg.NewConfig", "ex.com/cache.NewCache", "ex.com/repo.NewRepo", "ex.com/srv.NewServer"},
+			wantSteps: []string{"ex.com/cfg.NewConfig", "ex.com/repo.NewRepo", "ex.com/cache.NewCache", "ex.com/srv.NewServer"},
 			wantArgs: map[string][]ValueRef{
 				"ex.com/srv.NewServer": {
-					{Type: repo, Kind: FromProvider, Index: 2},
-					{Type: cache, Kind: FromProvider, Index: 1},
+					{Type: repo, Kind: FromProvider, Index: 1},
+					{Type: cache, Kind: FromProvider, Index: 2},
 				},
 			},
 			wantRoot: ValueRef{Type: srv, Kind: FromProvider, Index: 3},
+		},
+		{
+			// Like google/wire, independent providers follow the consumer's
+			// parameter order, not their names: zeta's subtree comes first.
+			name: "independent providers follow parameter order, not names",
+			inj: InjectorSpec{FuncName: "Init", ReturnType: srv, Providers: []ProviderNode{
+				prov("ex.com/a.NewAlpha", "ex.com/a.Alpha"),
+				prov("ex.com/b.NewBeta", "ex.com/b.Beta"),
+				prov("ex.com/srv.NewServer", srv, "ex.com/z.Zeta", "ex.com/a.Alpha"),
+				prov("ex.com/z.NewZeta", "ex.com/z.Zeta", "ex.com/b.Beta"),
+			}},
+			wantSteps: []string{"ex.com/b.NewBeta", "ex.com/z.NewZeta", "ex.com/a.NewAlpha", "ex.com/srv.NewServer"},
+			wantRoot:  ValueRef{Type: srv, Kind: FromProvider, Index: 3},
 		},
 		{
 			name: "injector params and binding; unused providers are skipped",
@@ -168,6 +181,7 @@ func TestResolve_Deterministic(t *testing.T) {
 			t.Fatalf("run %d: steps = %v, want %v", i, ids, first)
 		}
 	}
+	// Z(A, B, C) with B(A): parameter order, A built once.
 	want := []string{"ex.com/a.NewA", "ex.com/b.NewB", "ex.com/c.NewC", "ex.com/z.NewZ"}
 	if !reflect.DeepEqual(first, want) {
 		t.Errorf("steps = %v, want %v", first, want)
