@@ -152,8 +152,9 @@ type resolver struct {
 	// DFS state.
 	state map[TypeKey]visitState
 	stack []TypeKey
-	// needed collects the provider output types required by the root.
-	needed map[TypeKey]bool
+	// order collects the provider output types required by the root in
+	// depth-first post-order.
+	order []TypeKey
 }
 
 type visitState int
@@ -167,8 +168,10 @@ const (
 // Resolve builds the dependency graph of inj starting from its return type and
 // returns the providers in topological order.
 //
-// The order is deterministic: Kahn's algorithm is used and, among providers
-// that are ready at the same time, the one with the smallest ID comes first.
+// The order matches google/wire: a depth-first walk from the return type that
+// visits each provider's parameters in declaration order and calls a provider
+// once all of them are built. It depends only on the dependency graph and the
+// parameter order, not on provider names or the order of the provider sets.
 // Missing, duplicate and circular dependencies are reported as *ResolveError
 // with the full dependency chain.
 func Resolve(inj *InjectorSpec) (*ResolvedInjector, error) {
@@ -178,7 +181,6 @@ func Resolve(inj *InjectorSpec) (*ResolvedInjector, error) {
 		providers: make(map[TypeKey]*ProviderNode, len(inj.Providers)),
 		bindings:  make(map[TypeKey]TypeKey, len(inj.Bindings)),
 		state:     make(map[TypeKey]visitState),
-		needed:    make(map[TypeKey]bool),
 	}
 	if err := r.buildTables(); err != nil {
 		return nil, err
@@ -327,7 +329,7 @@ func (r *resolver) visit(t TypeKey) error {
 		}
 	}
 	r.state[t] = done
-	r.needed[t] = true
+	r.order = append(r.order, t)
 
 	if p.HasError && !r.inj.HasError {
 		return r.errorf(ErrKindMissingError, r.stack, "provider "+p.ID+" returns an error")
@@ -355,47 +357,12 @@ func (r *resolver) source(t TypeKey) TypeKey {
 	return supplier
 }
 
-// plan orders the needed providers with Kahn's algorithm and wires up the
+// plan turns the providers collected by visit into steps and wires up the
 // argument references.
 func (r *resolver) plan() (*ResolvedInjector, error) {
-	// Deterministic node list.
-	nodes := make([]TypeKey, 0, len(r.needed))
-	for t := range r.needed {
-		nodes = append(nodes, t)
-	}
-	sort.Slice(nodes, func(i, j int) bool { return r.providers[nodes[i]].ID < r.providers[nodes[j]].ID })
-
-	indeg := make(map[TypeKey]int, len(nodes))
-	dependents := make(map[TypeKey][]TypeKey, len(nodes))
-	for _, t := range nodes {
-		deps := make(map[TypeKey]bool)
-		for _, param := range r.providers[t].Params {
-			sup := r.source(param.Type)
-			if r.needed[sup] && !deps[sup] {
-				deps[sup] = true
-				indeg[t]++
-				dependents[sup] = append(dependents[sup], t)
-			}
-		}
-	}
-
-	var ready []TypeKey
-	for _, t := range nodes {
-		if indeg[t] == 0 {
-			ready = append(ready, t)
-		}
-	}
-	byID := func(s []TypeKey) {
-		sort.Slice(s, func(i, j int) bool { return r.providers[s[i]].ID < r.providers[s[j]].ID })
-	}
-
-	stepIndex := make(map[TypeKey]int, len(nodes))
-	res := &ResolvedInjector{Injector: r.inj}
-	for len(ready) > 0 {
-		byID(ready)
-		t := ready[0]
-		ready = ready[1:]
-
+	stepIndex := make(map[TypeKey]int, len(r.order))
+	res := &ResolvedInjector{Injector: r.inj, Steps: make([]Step, 0, len(r.order))}
+	for _, t := range r.order {
 		p := r.providers[t]
 		step := Step{Provider: *p, Args: make([]ValueRef, len(p.Params))}
 		for i, param := range p.Params {
@@ -403,23 +370,6 @@ func (r *resolver) plan() (*ResolvedInjector, error) {
 		}
 		stepIndex[t] = len(res.Steps)
 		res.Steps = append(res.Steps, step)
-
-		for _, d := range dependents[t] {
-			indeg[d]--
-			if indeg[d] == 0 {
-				ready = append(ready, d)
-			}
-		}
-	}
-	if len(res.Steps) != len(nodes) {
-		// Unreachable after a successful DFS, kept as a safety net.
-		var rest []TypeKey
-		for _, t := range nodes {
-			if _, ok := stepIndex[t]; !ok {
-				rest = append(rest, t)
-			}
-		}
-		return nil, r.errorf(ErrKindCircularDependency, rest, "topological sort did not converge")
 	}
 	res.Root = r.ref(r.inj.ReturnType, stepIndex)
 	return res, nil

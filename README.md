@@ -134,7 +134,9 @@ Tip: add `//go:generate go tool knit gen` to a file in your module and regenerat
 | `knit.NewSet(...)` | Groups providers, other sets and bindings into a reusable package-level variable. Sets may be nested and may live in other packages. |
 | `knit.Bind(new(Iface), new(*Impl))` | Satisfies requests for an interface with a concrete type that some provider builds. |
 
-If a provider fails, the cleanup functions of everything built so far run in reverse order (LIFO) before the error is returned. A nil cleanup is skipped, and a cleanup that panics does not prevent the remaining ones from running.
+Providers are called in dependency order, as in google/wire: starting from the injector's result, each provider's dependencies are built first, in the order of its parameters. Reorder a constructor's parameters to change the order of independent providers; their names do not matter.
+
+If a provider fails, the cleanup functions of everything built so far run in reverse order (LIFO) before the error is returned. The cleanup returned by the injector also runs them in reverse order. A nil cleanup is skipped, and a cleanup that panics does not prevent the remaining ones from running.
 
 Generated code is deterministic: the same input always produces byte-identical output. Errors explain the full dependency chain:
 
